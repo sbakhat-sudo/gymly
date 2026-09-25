@@ -1,16 +1,19 @@
 {
   "expo": {
-    "name": "mon-app",
-    "slug": "mon-app",
+    "name": "Gymly",
+    "slug": "gymly",
     "version": "1.0.0",
+    "sdkVersion": "57.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "monapp",
+    "scheme": "gymly",
+    "platforms": ["ios", "android","web"],
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,16 +22,12 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0B6E4F",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

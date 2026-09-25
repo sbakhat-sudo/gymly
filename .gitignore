@@ -16,7 +16,23 @@ expo-env.d.ts
 *.p8
 *.p12
 *.key
+*.keystore
 *.mobileprovision
+
+# Secrets and credentials (this demo must never contain any)
+.env
+.env.*
+!.env.example
+*.pem
+*.crt
+*.cer
+*.pfx
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+credentials.json
+eas-credentials*
+secrets/
 
 # Metro
 .metro-health-check*
@@ -26,12 +42,12 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
+# macOS / Windows
 .DS_Store
-*.pem
+Thumbs.db
 
-# local env files
-.env*.local
+# tests
+coverage/
 
 # typescript
 *.tsbuildinfo
