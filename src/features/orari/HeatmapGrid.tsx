@@ -2,13 +2,15 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { BandIcon } from '@/components/BandIcon';
+import { decorativeA11yProps } from '@/lib/a11y';
 import { hourlyBands } from '@/lib/domain/heatmap';
 import { useI18n } from '@/lib/i18n';
-import { radius, useTheme } from '@/lib/theme';
+import { fontFamily, useTheme } from '@/lib/theme';
 import type { Band, Forecast, Weekday } from '@/schemas';
 
-const CELL_H = 30;
-const HOUR_COL_W = 30;
+const LABEL_W = 34;
+const CELL_H = 24;
+const GAP = 3;
 
 interface HeatmapGridProps {
   week: readonly Forecast[];
@@ -23,10 +25,10 @@ interface HeatmapGridProps {
 }
 
 /**
- * Weekly grid: 7 day columns × hourly rows. Each cell shows the forecast band by colour AND by
- * shape (circle / triangle / square, as in the Home hero); closed hours are dashed and empty.
- * A whole column is one large touch target (tap = day detail), so the 44pt minimum holds even
- * though the columns are narrow. The day detail list carries the accessible per-hour text.
+ * Weekly grid: 7 day rows × hourly columns. Each cell shows the forecast band by colour AND by a
+ * small shape (circle / triangle / square, as everywhere else); closed hours are dashed and empty.
+ * A whole row is one touch target (tap = day detail): the row is 34pt tall and its vertical
+ * hitSlop brings the target to the 44pt minimum. The day detail list carries the per-hour text.
  */
 export function HeatmapGrid({ week, firstHour, lastHour, selectedDay, onSelectDay, now, habit }: HeatmapGridProps) {
   const theme = useTheme();
@@ -35,13 +37,16 @@ export function HeatmapGrid({ week, firstHour, lastHour, selectedDay, onSelectDa
   const perDay = week.map((day) => hourlyBands(day.buckets));
 
   return (
-    <View style={{ flexDirection: 'row', gap: 2 }}>
-      <View style={{ width: HOUR_COL_W }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <View style={{ height: 44 }} />
+    <View style={{ gap: 2 }}>
+      <View {...decorativeA11yProps} style={{ flexDirection: 'row', gap: GAP, marginBottom: 2 }}>
+        <View style={{ width: LABEL_W }} />
         {hours.map((h) => (
-          <View key={h} style={{ height: CELL_H + 4, justifyContent: 'center' }}>
-            <AppText variant="caption" muted>
-              {String(h).padStart(2, '0')}
+          <View key={h} style={{ flex: 1, alignItems: 'center', overflow: 'visible' }}>
+            <AppText
+              color={theme.faint}
+              numberOfLines={1}
+              style={{ fontFamily: fontFamily.mono, fontSize: 9, lineHeight: 12, width: 24, textAlign: 'center' }}>
+              {h % 3 === 0 ? String(h).padStart(2, '0') : ''}
             </AppText>
           </View>
         ))}
@@ -57,18 +62,20 @@ export function HeatmapGrid({ week, firstHour, lastHour, selectedDay, onSelectDa
             accessibilityRole="button"
             accessibilityLabel={t('schedule.dayA11y', { day: weekday(day) })}
             accessibilityState={{ selected }}
+            hitSlop={{ top: 5, bottom: 5 }}
             style={{
-              flex: 1,
-              minWidth: 34,
-              borderRadius: radius.md,
-              backgroundColor: selected ? theme.surfaceAlt : 'transparent',
-              paddingBottom: 2,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: GAP,
+              paddingVertical: 4,
+              borderRadius: 8,
+              backgroundColor: selected ? theme.glassTint : 'transparent',
             }}>
-            <View style={{ height: 44, alignItems: 'center', justifyContent: 'center' }}>
-              <AppText variant="caption" style={{ fontWeight: selected ? '800' : '600' }}>
-                {weekdayShort(day)}
-              </AppText>
-            </View>
+            <AppText
+              color={selected ? theme.text : theme.textMuted}
+              style={{ width: LABEL_W, paddingLeft: 4, fontSize: 12, lineHeight: 16, fontWeight: selected ? '700' : '500' }}>
+              {weekdayShort(day)}
+            </AppText>
             {hours.map((h) => (
               <Cell
                 key={h}
@@ -87,31 +94,49 @@ export function HeatmapGrid({ week, firstHour, lastHour, selectedDay, onSelectDa
 function Cell({ band, isNow, isHabit }: { band: Band | null; isNow: boolean; isHabit: boolean }) {
   const theme = useTheme();
   const colors = band ? theme.band[band] : null;
-  return (
+  const cell = (
     <View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
+      {...decorativeA11yProps}
       style={{
-        height: CELL_H,
-        margin: 2,
-        borderRadius: 6,
+        flex: 1,
+        alignSelf: 'stretch',
+        borderRadius: isNow ? 3 : 5,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors ? colors.solid : 'transparent',
-        // Closed = dashed and empty; now = solid heavy outline in the text colour.
-        borderWidth: isNow ? 3 : band ? 0 : 1,
-        borderStyle: band || isNow ? 'solid' : 'dashed',
-        borderColor: isNow ? theme.text : theme.border,
+        // Closed = dashed and empty.
+        borderWidth: band ? 0 : 1,
+        borderStyle: 'dashed',
+        borderColor: theme.border,
       }}>
       {band && colors ? (
         isHabit ? (
-          <AppText color={colors.onSolid} style={{ fontSize: 14, fontWeight: '800', lineHeight: 16 }}>
+          <AppText color={colors.onSolid} style={{ fontSize: 10, lineHeight: 12, fontWeight: '700' }}>
             ★
           </AppText>
         ) : (
-          <BandIcon band={band} size={13} color={colors.onSolid} />
+          <View style={{ opacity: 0.85 }}>
+            <BandIcon band={band} size={8} color={colors.onSolid} />
+          </View>
         )
       ) : null}
+    </View>
+  );
+  // "Adesso": a double ring — 2px of page colour, then 2px of text colour — so it reads on any band fill.
+  return (
+    <View
+      {...decorativeA11yProps}
+      style={{
+        flex: 1,
+        height: CELL_H,
+        flexDirection: 'row',
+        borderRadius: 5,
+        padding: isNow ? 2 : 0,
+        borderWidth: isNow ? 2 : 0,
+        borderColor: theme.text,
+        backgroundColor: isNow ? theme.surface : 'transparent',
+      }}>
+      {cell}
     </View>
   );
 }

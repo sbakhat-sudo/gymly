@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState } from 'react-native';
+import { AccessibilityInfo, AppState } from 'react-native';
 
 import { useClock, useDemoControls } from './services-context';
 
@@ -39,7 +39,24 @@ export function useNow(intervalMs: number, enabled = true): number {
   return now;
 }
 
-/** Increments whenever the Demo panel changes the scenario or the simulated time, so screens refetch. */
+/** True when the OS "reduce motion" accessibility setting is on: breathing/pulsing decorations go static. */
+export function useReduceMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      if (alive) setReduce(v);
+    });
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+  return reduce;
+}
+
+/** Increments whenever the test scenario or the simulated time changes, so screens refetch. */
 export function useDemoRevision(): number {
   const demo = useDemoControls();
   const clock = useClock();

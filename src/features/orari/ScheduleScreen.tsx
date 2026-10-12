@@ -3,13 +3,12 @@ import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { BandIcon } from '@/components/BandIcon';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
-import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
 import { GymGate } from '@/features/common/GymGate';
 import { useAppState } from '@/lib/app-state';
+import { allGreenWindows } from '@/lib/domain/green-window';
 import { visibleHours } from '@/lib/domain/heatmap';
 import { modalArrival, personalSuggestion } from '@/lib/domain/suggestion';
 import { bucketLabel, localTime } from '@/lib/domain/time';
@@ -19,10 +18,13 @@ import { useWeekForecast } from '@/lib/queries';
 import { useApi } from '@/lib/services-context';
 import { spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
-import type { Band, SiteSummary, Weekday } from '@/schemas';
+import type { SiteSummary, Weekday } from '@/schemas';
 
-import { DayDetail } from './DayDetail';
-import { HeatmapGrid } from './HeatmapGrid';
+import { DayBarChart } from './DayBarChart';
+import { DayPills } from './DayPills';
+import { FreeWindowsList } from './FreeWindowsList';
+import { ScheduleLegend } from './ScheduleLegend';
+import { bestWindowFor, DayChartCard, PerTeCard, ScheduleHeader } from './ScheduleParts';
 
 export function ScheduleScreen() {
   return (
@@ -33,7 +35,7 @@ export function ScheduleScreen() {
 }
 
 function ScheduleContent({ site }: { site: SiteSummary }) {
-  const { t, weekday, band: bandLabel } = useI18n();
+  const { t, weekday } = useI18n();
   const theme = useTheme();
   const api = useApi();
   const { memberSiteId } = useAppState();
@@ -41,7 +43,10 @@ function ScheduleContent({ site }: { site: SiteSummary }) {
   const now = useNow(30_000, focused);
   const local = localTime(new Date(now), site.timezone);
   const [selected, setSelected] = useState<Weekday | null>(null);
-  const selectedDay = selected ?? local.weekday;
+  // Storico shows only completed days — defaults to the most recent one (yesterday). On a Monday
+  // there is no past day left in this fixed Mon–Sun strip (see DayPills' own `day >= today` disabling),
+  // so it falls back to today rather than pointing at a day that doesn't exist in this week's data.
+  const selectedDay = selected ?? ((local.weekday > 0 ? local.weekday - 1 : local.weekday) as Weekday);
 
   const week = useWeekForecast(site.site_id);
   const linked = memberSiteId === site.site_id && site.capabilities.points;
@@ -63,95 +68,56 @@ function ScheduleContent({ site }: { site: SiteSummary }) {
   const habitDay = habit ? week.data[habit.weekday] : undefined;
   const suggestion = habit && habitDay ? personalSuggestion(habit.bucket, habitDay.buckets) : null;
   const detail = week.data[selectedDay];
+  const isToday = selectedDay === local.weekday;
+  const nowHour = isToday ? Math.floor(local.minutes / 60) : null;
+  // Still computed (not shown as a card any more) purely to pick which hour the detail chart opens
+  // scrolled to — the day's own quietest stretch is still the most useful first thing to see.
+  const bestWindow = detail ? bestWindowFor(detail.buckets, isToday, local.minutes) : null;
+  const freeWindows = detail ? allGreenWindows(detail.buckets) : [];
+  const closedAllDay = !detail || detail.buckets.length === 0;
 
   return (
-    <View style={{ gap: spacing.lg }}>
-      <View style={{ gap: spacing.xs }}>
-        <AppText variant="headline" accessibilityRole="header">
-          {t('schedule.title')}
-        </AppText>
-        <AppText muted>{t('schedule.subtitle')}</AppText>
-      </View>
+    <View style={{ gap: 14 }}>
+      <ScheduleHeader gymName={site.name} />
 
-      {habit && suggestion ? (
-        <Card>
-          <AppText variant="title" accessibilityRole="header">
-            {t('schedule.suggestion.title')}
-          </AppText>
-          <AppText>
-            {t('schedule.suggestion', {
-              day: weekday(habit.weekday),
-              time: bucketLabel(habit.bucket),
-              alt: bucketLabel(suggestion.alternativeBucket),
-              pct: suggestion.lessPercent,
-            })}
-          </AppText>
-        </Card>
-      ) : null}
+      <DayPills week={week.data} selectedDay={selectedDay} onSelectDay={setSelected} today={local.weekday} />
 
-      <Card>
-        {range ? (
-          <HeatmapGrid
-            week={week.data}
+      {detail && range && !closedAllDay ? (
+        <DayChartCard
+          dayName={weekday(selectedDay)}
+          span={`${String(range.first).padStart(2, '0')}–${String(range.last + 1).padStart(2, '0')}`}>
+          <DayBarChart
+            key={selectedDay}
+            day={selectedDay}
+            buckets={detail.buckets}
             firstHour={range.first}
             lastHour={range.last}
-            selectedDay={selectedDay}
-            onSelectDay={setSelected}
-            now={{ weekday: local.weekday, hour: Math.floor(local.minutes / 60) }}
-            habit={habit ? { weekday: habit.weekday, hour: Math.floor(habit.bucket / 4) } : null}
+            nowHour={nowHour}
+            habitHour={habit && habit.weekday === selectedDay ? Math.floor(habit.bucket / 4) : null}
+            initialHour={bestWindow ? Number(bestWindow.from.slice(0, 2)) : null}
           />
-        ) : (
-          <AppText muted>{t('schedule.closedDay')}</AppText>
-        )}
+          <ScheduleLegend />
+        </DayChartCard>
+      ) : null}
 
-        <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-            {(['green', 'amber', 'red'] as const).map((band) => (
-              <LegendBand key={band} band={band} label={bandLabel(band)} />
-            ))}
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-            <LegendSwatch label={t('schedule.legend.closed')}>
-              <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: theme.textMuted }} />
-            </LegendSwatch>
-            <LegendSwatch label={t('schedule.legend.now')}>
-              <View style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 3, borderColor: theme.text }} />
-            </LegendSwatch>
-            {habit ? (
-              <LegendSwatch label={t('schedule.legend.habit')}>
-                <AppText style={{ fontSize: 16, fontWeight: '800', lineHeight: 18 }}>★</AppText>
-              </LegendSwatch>
-            ) : null}
-          </View>
-        </View>
-      </Card>
+      {detail && !closedAllDay ? (
+        <FreeWindowsList day={selectedDay} windows={freeWindows} />
+      ) : null}
 
-      {detail ? <DayDetail day={selectedDay} forecast={detail} /> : null}
+      {habit && suggestion ? (
+        <PerTeCard
+          text={t('schedule.suggestion', {
+            day: weekday(habit.weekday),
+            time: bucketLabel(habit.bucket),
+            alt: bucketLabel(suggestion.alternativeBucket),
+            pct: suggestion.lessPercent,
+          })}
+        />
+      ) : null}
 
-      <AppText variant="caption" muted style={{ textAlign: 'center' }}>
+      <AppText color={theme.faint} style={{ fontSize: 11, lineHeight: 15, textAlign: 'center' }}>
         {t('schedule.note')}
       </AppText>
-    </View>
-  );
-}
-
-function LegendBand({ band, label }: { band: Band; label: string }) {
-  const theme = useTheme();
-  const colors = theme.band[band];
-  return (
-    <LegendSwatch label={label}>
-      <View style={{ width: 22, height: 22, borderRadius: 5, backgroundColor: colors.solid, alignItems: 'center', justifyContent: 'center' }}>
-        <BandIcon band={band} size={13} color={colors.onSolid} />
-      </View>
-    </LegendSwatch>
-  );
-}
-
-function LegendSwatch({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2 }}>
-      {children}
-      <AppText variant="caption">{label}</AppText>
     </View>
   );
 }

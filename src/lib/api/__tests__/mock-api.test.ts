@@ -1,5 +1,6 @@
 import type { Clock } from '@/lib/clock';
 import { isApiError, type ApiErrorCode } from '@/lib/api/errors';
+import { BAND_ORDER } from '@/lib/domain/band';
 
 import { createMockApi } from '../mock-api';
 import type { DemoControls } from '../demo';
@@ -106,7 +107,7 @@ describe('occupancy', () => {
     expect(await api.getOccupancy(A)).toEqual(await api.getOccupancy(A));
   });
 
-  describe('demo scenarios', () => {
+  describe('scenario overrides (test-only mock controls)', () => {
     it('adapter down → status unavailable, no band at all', async () => {
       const { api, demo } = setup();
       demo.setScenario({ adapterDown: true });
@@ -177,6 +178,47 @@ describe('occupancy', () => {
   it('unknown site → not_found', async () => {
     const { api } = setup();
     expect(await errorCode(api.getOccupancy('st_nope'))).toBe('not_found');
+  });
+});
+
+describe('check-in / check-out (member presence nudge, never a people count)', () => {
+  it('never exposes a count in the payload', async () => {
+    const { api } = setup();
+    await api.checkIn(A);
+    const occ = await api.getOccupancy(A);
+    expect(JSON.stringify(occ)).not.toMatch(/"people"|"count"/);
+    await api.checkOut(A);
+  });
+
+  it('nudges the band up as more members check in, and back down as they check out', async () => {
+    const { api, setNow } = setup();
+    setNow(new Date('2026-09-21T08:00:00Z')); // 10:00 Rome, a quiet mid-morning slot
+    const before = await api.getOccupancy(A);
+    for (let i = 0; i < 20; i++) await api.checkIn(A);
+    const during = await api.getOccupancy(A);
+    for (let i = 0; i < 20; i++) await api.checkOut(A);
+    const after = await api.getOccupancy(A);
+    expect(before.status).toBe('ok');
+    expect(during.status).toBe('ok');
+    if (before.status === 'ok' && during.status === 'ok') {
+      expect(BAND_ORDER.indexOf(during.band)).toBeGreaterThanOrEqual(BAND_ORDER.indexOf(before.band));
+    }
+    expect(after).toEqual(before);
+  });
+
+  it('checkOut never goes below zero (an unmatched check-out is a no-op)', async () => {
+    const { api, setNow } = setup();
+    setNow(new Date('2026-09-21T08:00:00Z'));
+    const before = await api.getOccupancy(A);
+    await api.checkOut(A);
+    await api.checkOut(A);
+    expect(await api.getOccupancy(A)).toEqual(before);
+  });
+
+  it('unknown site → not_found', async () => {
+    const { api } = setup();
+    expect(await errorCode(api.checkIn('st_nope'))).toBe('not_found');
+    expect(await errorCode(api.checkOut('st_nope'))).toBe('not_found');
   });
 });
 

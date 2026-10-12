@@ -1,6 +1,7 @@
 import type { ColorValue } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
+import { decorativeA11yProps } from '@/lib/a11y';
 import type { Band } from '@/schemas';
 
 /**
@@ -9,12 +10,7 @@ import type { Band } from '@/schemas';
  */
 export function BandIcon({ band, size = 24, color }: { band: Band; size?: number; color: ColorValue }) {
   return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants">
+    <Svg width={size} height={size} viewBox="0 0 24 24" {...decorativeA11yProps}>
       {band === 'green' ? <Circle cx={12} cy={12} r={8.5} fill={color} /> : null}
       {band === 'amber' ? (
         <Path d="M12 3.5 21.5 20h-19z" fill={color} stroke={color} strokeWidth={2} strokeLinejoin="round" />

@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { BandBadge } from '@/components/BandBadge';
+import { BandIcon } from '@/components/BandIcon';
 import { Banner } from '@/components/Banner';
-import { Card } from '@/components/Card';
-import { ClockIcon, StarIcon } from '@/components/icons';
+import { ChevronDownIcon, ChevronRightIcon, ClockIcon, StarFilledIcon } from '@/components/icons';
+import { LogoMark } from '@/components/Logo';
 import { Screen } from '@/components/Screen';
 import { GymGate } from '@/features/common/GymGate';
+import { BestMomentCard } from '@/features/orari/BestMomentCard';
+import { bestWindowFor } from '@/features/orari/ScheduleParts';
 import { useAppState } from '@/lib/app-state';
 import { nextGreenWindow } from '@/lib/domain/green-window';
 import { resolveHomeState } from '@/lib/domain/home-state';
@@ -20,15 +22,18 @@ import { useForecast } from '@/lib/queries';
 import { useApi } from '@/lib/services-context';
 import { useCurrentSite } from '@/lib/sites-context';
 import { storage } from '@/lib/storage';
-import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
+import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 import type { SiteSummary } from '@/schemas';
 
 import { HomeHero, type HeroView } from './HomeHero';
+import { UpcomingStrip } from './UpcomingStrip';
 import { useGreenAlert } from './use-green-alert';
 import { useOccupancy } from './use-occupancy';
 
-/** Home tab: the gym picker until a gym is chosen, then the live view of that gym. */
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+/** Live tab: the gym picker until a gym is chosen, then the live view of that gym. */
 export function HomeScreen() {
   const current = useCurrentSite();
   if (current.site) return <HomeContent site={current.site} />;
@@ -64,10 +69,16 @@ function HomeContent({ site }: { site: SiteSummary }) {
     stalenessLimitS: site.staleness_limit_s,
   });
 
-  // The forecast is only fetched when the live reading cannot carry the screen (still cached for the session).
-  const forecast = useForecast(site.site_id, local.weekday, open.open && state.mode !== 'live');
+  // Fetched whenever the gym is open (session-cached): the live reading uses it as a fallback,
+  // and the "prossime ore" strip / "momento migliore" card below the hero need it even when live.
+  const forecast = useForecast(site.site_id, local.weekday, open.open);
   const currentBucket = bucketOfMinutes(local.minutes);
   const forecastBand = forecast.data?.buckets.find((b) => b.bucket === currentBucket)?.band;
+  // `isToday: false` is deliberate here (even though this IS today): it switches `bestWindowFor` from
+  // "best window still ahead" to "longest window of the whole day", so the card still has something
+  // useful to say late in the day, after the best window has already passed.
+  const closedAllDay = !forecast.data || forecast.data.buckets.length === 0;
+  const bestWindowToday = forecast.data ? bestWindowFor(forecast.data.buckets, false, local.minutes) : null;
 
   // The member has now seen real value: the notification opt-in may be offered from the next session.
   const sawValue = state.mode === 'live' || state.mode === 'stale';
@@ -118,18 +129,39 @@ function HomeContent({ site }: { site: SiteSummary }) {
     metaParts.push(t('time.updated', { ago: duration(state.ageS) }));
     if (state.mode === 'live' && state.accuracyNote) metaParts.push(t('time.accuracy', { value: state.accuracyNote }));
   }
+  const meta = metaParts.length > 0 ? metaParts.join(' · ') : null;
+
+  const liveBand = view.kind === 'data' && state.mode === 'live' ? state.band : null;
+  const dayName = weekday(local.weekday);
+  const clockLabel = `${dayName.charAt(0).toUpperCase()}${dayName.slice(1)} · ${pad(Math.floor(local.minutes / 60))}:${pad(local.minutes % 60)}`;
 
   return (
     <Screen
+      orb={liveBand ? { color: theme.band[liveBand].solid, top: 40, size: 380 } : undefined}
       refreshing={pulling}
       onRefresh={() => {
         setPulling(true);
         void occupancy.refresh().finally(() => setPulling(false));
       }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-        <AppText variant="title" accessibilityRole="header" style={{ flex: 1 }}>
-          {site.name}
-        </AppText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+        <Pressable
+          onPress={() => router.push('/impostazioni')}
+          accessibilityRole="button"
+          accessibilityLabel={`${site.name}. ${t('home.changeGym')}`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: MIN_TAP, flexShrink: 1 }}>
+          <LogoMark size={38} bgColor={theme.background} bandColor={liveBand ? theme.band[liveBand].solid : theme.textMuted} />
+          <View style={{ flexShrink: 1 }}>
+            <AppText muted style={{ fontSize: 11, lineHeight: 14, fontWeight: '500' }}>
+              {clockLabel}
+            </AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <AppText accessibilityRole="header" numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '600', flexShrink: 1 }}>
+                {site.name}
+              </AppText>
+              <ChevronDownIcon color={theme.textMuted} size={13} strokeWidth={2.6} />
+            </View>
+          </View>
+        </Pressable>
         {linked && points.data ? (
           <Pressable
             onPress={() => router.push('/punti')}
@@ -139,15 +171,15 @@ function HomeContent({ site }: { site: SiteSummary }) {
               minHeight: MIN_TAP,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: spacing.xs,
-              paddingHorizontal: spacing.md,
+              gap: 6,
+              paddingHorizontal: 13,
               borderRadius: radius.pill,
-              backgroundColor: theme.surfaceAlt,
+              backgroundColor: theme.glassBorder,
               borderWidth: 1,
-              borderColor: theme.border,
+              borderColor: theme.glassBorder,
             }}>
-            <StarIcon color={theme.text} size={18} />
-            <AppText style={{ fontWeight: '700' }}>{t('home.pointsChip', { n: points.data.balance })}</AppText>
+            <StarFilledIcon color={theme.accent} size={14} />
+            <AppText style={{ fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{points.data.balance}</AppText>
           </Pressable>
         ) : null}
       </View>
@@ -156,46 +188,97 @@ function HomeContent({ site }: { site: SiteSummary }) {
         <Banner title={t('state.offline')} message={t('state.offlineDetail')} />
       ) : null}
 
-      <HomeHero view={view} />
+      <HomeHero view={view} meta={liveBand ? meta : null} />
 
-      {metaParts.length > 0 ? (
-        <AppText muted accessibilityLabel={metaParts.join(', ')} style={{ textAlign: 'center' }}>
-          {metaParts.join(' · ')}
+      {meta && !liveBand ? (
+        <AppText muted accessibilityLabel={metaParts.join(', ')} style={{ textAlign: 'center', fontSize: 12 }}>
+          {meta}
         </AppText>
       ) : null}
 
-      {view.kind === 'data' && state.mode === 'live' && state.zones.length > 0 ? (
-        <Card>
-          <AppText variant="title" accessibilityRole="header">
-            {t('home.zones')}
+      {forecast.data ? (
+        <BestMomentCard
+          window={bestWindowToday}
+          title={t('schedule.bestMoment.title')}
+          emptyText={closedAllDay ? t('schedule.closedDay') : t('schedule.noFreeWindows')}
+          siteName={site.name}
+          timezone={site.timezone}
+          dateKey={local.dateKey}
+        />
+      ) : null}
+
+      {open.open && forecast.data ? (
+        <View
+          style={{
+            borderRadius: radius.xl,
+            padding: 18,
+            gap: spacing.lg,
+            backgroundColor: theme.glass,
+            borderWidth: 1,
+            borderColor: theme.glassBorder,
+          }}>
+          <AppText accessibilityRole="header" style={{ fontSize: 15, fontWeight: '600' }}>
+            {t('home.upcoming')}
           </AppText>
-          {state.zones.map((zone) => (
-            <View
-              key={zone.zone_id}
-              accessible
-              accessibilityLabel={`${zone.name}: ${state.approximate ? '~' : ''}${bandLabel(zone.band)}`}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: MIN_TAP, gap: spacing.md }}>
-              <AppText style={{ flexShrink: 1 }}>{zone.name}</AppText>
-              <BandBadge band={zone.band} approximate={state.approximate} />
-            </View>
-          ))}
-        </Card>
+          <UpcomingStrip forecast={forecast.data} currentHour={Math.floor(local.minutes / 60)} />
+        </View>
+      ) : null}
+
+      {view.kind === 'data' && state.mode === 'live' && state.zones.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+          {state.zones.map((zone) => {
+            const colors = theme.band[zone.band];
+            return (
+              <View
+                key={zone.zone_id}
+                accessible
+                accessibilityLabel={`${zone.name}: ${state.approximate ? '~' : ''}${bandLabel(zone.band)}`}
+                style={{ flexBasis: '46%', flexGrow: 1, borderRadius: radius.card, padding: spacing.lg, gap: 18, backgroundColor: colors.soft }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
+                  <AppText color={colors.onSoft} numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', flexShrink: 1 }}>
+                    {zone.name}
+                  </AppText>
+                  <BandIcon band={zone.band} size={15} color={colors.solid} />
+                </View>
+                <AppText
+                  color={colors.solid}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  style={{ fontFamily: fontFamily.displaySemi, fontSize: 19, lineHeight: 24, letterSpacing: 19 * -0.04 }}>
+                  {state.approximate ? '~' : ''}
+                  {bandLabel(zone.band)}
+                </AppText>
+              </View>
+            );
+          })}
+        </View>
       ) : null}
 
       {window ? (
-        <Card>
-          <View accessible style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            <ClockIcon color={theme.text} size={24} />
-            <AppText style={{ flex: 1, fontWeight: '600' }}>
+        <Pressable
+          onPress={() => router.push('/orari')}
+          accessibilityRole="button"
+          style={({ pressed }) => ({
+            borderRadius: radius.card,
+            paddingVertical: spacing.lg,
+            paddingHorizontal: 18,
+            backgroundColor: theme.primary,
+            gap: spacing.xs,
+            opacity: pressed ? 0.9 : 1,
+          })}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <ClockIcon color={theme.onPrimary} size={22} />
+            <AppText color={theme.onPrimary} style={{ flex: 1, fontSize: 15, fontWeight: '600' }}>
               {t('home.nextGreen', { from: window.from, to: window.to === '24:00' ? t('time.closing') : window.to })}
             </AppText>
+            <ChevronRightIcon color={theme.onPrimary} size={16} strokeWidth={2.2} />
           </View>
           {state.mode !== 'live' ? (
-            <AppText variant="caption" muted>
+            <AppText variant="caption" color={theme.onPrimary} style={{ opacity: 0.85, marginLeft: 34 }}>
               {t('state.forecast')}
             </AppText>
           ) : null}
-        </Card>
+        </Pressable>
       ) : showNoWindow ? (
         <AppText muted style={{ textAlign: 'center' }}>
           {t('home.noGreen')}

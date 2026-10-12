@@ -1,7 +1,8 @@
 /**
  * Synthetic "typical day" of a gym as a fraction of capacity_reference: morning bump, small lunch
  * bump and a strong evening peak around 19:00 (the "two peak hours" of the spec's motivating case).
- * Deterministic: it is mock data, not a model.
+ * A deterministic simulation, not a model fitted to real data — used both by the mock API (no real
+ * sensors exist in the demo) and, unbumped by real check-ins yet, as the Manager's live band.
  */
 const gauss = (m: number, mu: number, sigma: number): number => Math.exp(-((m - mu) ** 2) / (2 * sigma ** 2));
 
@@ -26,7 +27,7 @@ export function expectedRatio(weekday: number, minutes: number): number {
   return Math.min(1.2, Math.max(0, value));
 }
 
-/** FNV-1a hash of a string → deterministic pseudo-random number in [0, 1). Mock jitter only. */
+/** FNV-1a hash of a string → deterministic pseudo-random number in [0, 1). Simulation jitter only. */
 export function jitter(seed: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) {

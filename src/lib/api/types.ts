@@ -34,6 +34,15 @@ export interface GymlyApi {
   /** In-app "Cancella i miei dati": ask the service to erase everything it holds about this device. */
   requestDataDeletion(): Promise<void>;
 
+  /**
+   * PROVISIONAL — member-initiated presence signal (spec body has no endpoint for it). Nudges this
+   * site's live occupancy by one attendance unit; never returns or exposes a people count.
+   * `checkOut` is idempotent-safe to call even if the matching `checkIn` was never observed by the
+   * server (e.g. it was offline at the time): it simply cannot go below zero.
+   */
+  checkIn(siteId: string): Promise<void>;
+  checkOut(siteId: string): Promise<void>;
+
   /** GET /v1/me/points → 409 capability_unavailable on sites without named access control. */
   getPoints(): Promise<Points>;
   /** GET /v1/me/rewards */

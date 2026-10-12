@@ -26,7 +26,7 @@ export function useClock(): AdjustableClock {
   return useServices().clock;
 }
 
-/** `null` when the backend is not the demo one. */
+/** `null` when the backend is not the mock one — test-only scenario controls (see `api/demo.ts`). */
 export function useDemoControls(): DemoControls | null {
   return useServices().demo;
 }

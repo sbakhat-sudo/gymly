@@ -68,6 +68,12 @@ module.exports = defineConfig([
     rules: { 'no-restricted-imports': 'off' },
   },
   {
+    // The one real network boundary: the Supabase client (and code built on it) talks to the
+    // real backend. Everywhere else stays offline-by-default per the rule above.
+    files: ['src/lib/supabase/**', 'src/lib/api/supabase-*.ts', 'src/lib/auth/**'],
+    rules: { 'no-restricted-globals': 'off' },
+  },
+  {
     // The logger is the only place allowed to touch the console.
     files: ['src/lib/logger.ts'],
     rules: { 'no-console': 'off' },

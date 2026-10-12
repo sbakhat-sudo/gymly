@@ -1,28 +1,34 @@
 import { Tabs } from 'expo-router/js-tabs';
 
-import { ClockIcon, HomeIcon, SlidersIcon, StarIcon } from '@/components/icons';
+import { ClockIcon, LogInIcon, PulseIcon, SlidersIcon, StarIcon } from '@/components/icons';
+import { FloatingTabBar } from '@/features/common/FloatingTabBar';
 import { useI18n } from '@/lib/i18n';
-import { useTheme } from '@/lib/theme';
 
 export default function TabsLayout() {
   const { t } = useI18n();
-  const theme = useTheme();
 
   return (
     <Tabs
+      // A render function, not the component itself: React Navigation calls `tabBar(props)` as a
+      // plain function, which would run FloatingTabBar's hooks outside a component ("Invalid hook call").
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: theme.textMuted,
-        tabBarStyle: { backgroundColor: theme.surface, borderTopColor: theme.border },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: t('tab.home'),
-          tabBarAccessibilityLabel: t('tab.home'),
-          tabBarIcon: ({ color, size }) => <HomeIcon color={color} size={size} />,
+          title: t('tab.live'),
+          tabBarAccessibilityLabel: t('tab.live'),
+          tabBarIcon: ({ color, size }) => <PulseIcon color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="checkin"
+        options={{
+          title: t('tab.checkin'),
+          tabBarAccessibilityLabel: t('tab.checkin'),
+          tabBarIcon: ({ color, size }) => <LogInIcon color={color} size={size} />,
         }}
       />
       <Tabs.Screen

@@ -1,0 +1,255 @@
+import type { BottomTabBarProps } from 'expo-router/js-tabs';
+import { useState, type ReactNode } from 'react';
+import { Platform, Pressable, View, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAuth } from '@/lib/auth/auth-context';
+import { useI18n } from '@/lib/i18n';
+import { radius, spacing, useTheme } from '@/lib/theme';
+import { SIDEBAR_WIDTH, useSidebarMode } from '@/lib/use-sidebar-mode';
+
+import { AppText } from './AppText';
+import { Avatar } from './Avatar';
+import { ConfirmDialog } from './ConfirmDialog';
+import { LogOutIcon } from './icons';
+
+const BAR_HEIGHT = 68;
+
+function glow(): ViewStyle {
+  return Platform.select<ViewStyle>({
+    web: { boxShadow: '0 10px 30px -8px rgba(0,0,0,0.35)' } as ViewStyle,
+    android: { elevation: 6 },
+    default: { shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  });
+}
+
+function tooltipGlow(): ViewStyle {
+  return Platform.select<ViewStyle>({
+    web: { boxShadow: '0 8px 20px -6px rgba(0,0,0,0.45)' } as ViewStyle,
+    default: { shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  });
+}
+
+/**
+ * Same floating-pill idiom as the Client's FloatingTabBar, without the raised centre button (the
+ * Manager and Coach have no check-in-from-the-tab-bar). Used by the Manager (5 tabs) and Coach (2
+ * tabs). Must stay a function passed as `tabBar={(props) => <PillTabBar {...props} />}` —
+ * expo-router's forked BottomTabView calls this prop as a bare function, so a component reference
+ * breaks the Rules of Hooks (see FloatingTabBar.tsx for the same fix, hit once already).
+ *
+ * On wide web windows this renders as a left sidebar column instead (a bottom-of-phone pill reads
+ * as mobile UI, not a desktop app) — see `useSidebarMode`.
+ */
+export function PillTabBar(props: BottomTabBarProps) {
+  const isSidebar = useSidebarMode();
+  return isSidebar ? <Sidebar {...props} /> : <Pill {...props} />;
+}
+
+function Pill({ state, descriptors, navigation, insets }: BottomTabBarProps) {
+  const theme = useTheme();
+  const activeRoute = state.routes[state.index];
+
+  const goTo = (routeName: string, routeKey: string): void => {
+    const event = navigation.emit({ type: 'tabPress', target: routeKey, canPreventDefault: true });
+    if (activeRoute?.name !== routeName && !event.defaultPrevented) {
+      navigation.navigate(routeName);
+    }
+  };
+
+  return (
+    <View style={{ pointerEvents: 'box-none', position: 'absolute', left: 18, right: 18, bottom: 24 + insets.bottom, height: BAR_HEIGHT }}>
+      <View
+        style={[
+          {
+            height: BAR_HEIGHT,
+            borderRadius: BAR_HEIGHT / 2,
+            backgroundColor: theme.tabBar,
+            borderWidth: 1,
+            borderColor: theme.glassBorder,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-around',
+            paddingHorizontal: 6,
+          },
+          glow(),
+        ]}>
+        {state.routes.map((route) => {
+          const descriptor = descriptors[route.key];
+          if (!descriptor) return null;
+          const { options } = descriptor;
+          // Expo Router's file-based Tabs auto-registers every file in the directory as a route
+          // whether or not it's declared as a `<Tabs.Screen>` with tab options — an undeclared (or
+          // `href: null`, which this fork doesn't actually honour for a custom tabBar) file still
+          // shows up in `state.routes` with empty `options`, rendering as a blank, unlabelled tab
+          // slot. A real tab always sets `tabBarIcon`, so its absence is the reliable "skip this
+          // one" signal.
+          if (!options.tabBarIcon) return null;
+          const focused = activeRoute?.key === route.key;
+          const color = focused ? theme.text : theme.faint;
+          return (
+            <Pressable
+              key={route.key}
+              onPress={() => goTo(route.name, route.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: focused }}
+              accessibilityLabel={options.tabBarAccessibilityLabel ?? options.title}
+              style={{ width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }}>
+              {options.tabBarIcon?.({ focused, color, size: 24 })}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** One icon button in the sidebar: on hover (web only — native ignores `onHoverIn`/`onHoverOut`),
+ * shows the section's name in a dark pill to its right so the column can stay icon-only and slim. */
+function SidebarItem({
+  icon,
+  label,
+  focused,
+  danger = false,
+  onPress,
+}: {
+  icon: (color: string) => ReactNode;
+  label: string;
+  focused: boolean;
+  danger?: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
+  const color = danger ? theme.band.red.solid : focused ? theme.text : theme.faint;
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <Pressable
+        onPress={onPress}
+        onHoverIn={() => setHovered(true)}
+        onHoverOut={() => setHovered(false)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: focused }}
+        accessibilityLabel={label}
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: radius.lg,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: focused ? theme.surfaceAlt : 'transparent',
+        }}>
+        {icon(color)}
+      </Pressable>
+      {hovered ? (
+        <View
+          pointerEvents="none"
+          style={[
+            {
+              position: 'absolute',
+              left: '100%',
+              top: '50%',
+              marginTop: -17,
+              marginLeft: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 9,
+              borderRadius: radius.md,
+              backgroundColor: theme.text,
+            },
+            tooltipGlow(),
+          ]}>
+          <AppText color={theme.background} numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', letterSpacing: -0.2 }}>
+            {label}
+          </AppText>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const theme = useTheme();
+  const { t } = useI18n();
+  const auth = useAuth();
+  const insets = useSafeAreaInsets();
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const activeRoute = state.routes[state.index];
+  const profile = auth.status === 'active' || auth.status === 'admin' ? auth.profile : null;
+  const roleLabel = profile ? t(`sidebar.role.${profile.role}` as 'sidebar.role.manager' | 'sidebar.role.coach' | 'sidebar.role.admin') : null;
+
+  const goTo = (routeName: string, routeKey: string): void => {
+    const event = navigation.emit({ type: 'tabPress', target: routeKey, canPreventDefault: true });
+    if (activeRoute?.name !== routeName && !event.defaultPrevented) {
+      navigation.navigate(routeName);
+    }
+  };
+
+  return (
+    <View style={{ pointerEvents: 'box-none', position: 'absolute', top: 0, left: 0, bottom: 0, width: SIDEBAR_WIDTH }}>
+      <View
+        style={[
+          {
+            flex: 1,
+            margin: spacing.lg,
+            marginTop: spacing.lg + insets.top,
+            marginBottom: spacing.lg + insets.bottom,
+            borderRadius: radius.xxl,
+            backgroundColor: theme.tabBar,
+            borderWidth: 1,
+            borderColor: theme.glassBorder,
+            paddingVertical: spacing.xl,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          },
+          glow(),
+        ]}>
+        <View style={{ gap: spacing.sm, alignItems: 'center' }}>
+          {profile ? (
+            <View style={{ alignItems: 'center', gap: 4, marginBottom: spacing.md }}>
+              <Avatar uri={profile.avatarUrl} name={profile.fullName} size={48} />
+              {roleLabel ? (
+                <AppText variant="caption" muted style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                  {roleLabel}
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
+          {state.routes.map((route) => {
+            const descriptor = descriptors[route.key];
+            if (!descriptor) return null;
+            const { options } = descriptor;
+            if (!options.tabBarIcon) return null;
+            const focused = activeRoute?.key === route.key;
+            const label = options.tabBarAccessibilityLabel ?? options.title ?? '';
+            return (
+              <SidebarItem
+                key={route.key}
+                label={label}
+                focused={focused}
+                onPress={() => goTo(route.name, route.key)}
+                icon={(color) => options.tabBarIcon?.({ focused, color, size: 24 })}
+              />
+            );
+          })}
+        </View>
+
+        {auth.status === 'active' ? (
+          <SidebarItem label={t('account.signOut')} focused={false} danger onPress={() => setConfirmingSignOut(true)} icon={(color) => <LogOutIcon color={color} size={22} strokeWidth={2.2} />} />
+        ) : null}
+      </View>
+
+      <ConfirmDialog
+        visible={confirmingSignOut}
+        title={t('account.signOut.confirm.title')}
+        message=""
+        confirmLabel={t('account.signOut.confirm.action')}
+        destructive
+        onConfirm={() => {
+          setConfirmingSignOut(false);
+          void auth.signOut();
+        }}
+        onCancel={() => setConfirmingSignOut(false)}
+      />
+    </View>
+  );
+}

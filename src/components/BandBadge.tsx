@@ -42,7 +42,7 @@ export function BandBadge({ band, approximate = false, forecast = false, prefix 
         borderColor: colors.onSoft,
       }}>
       <BandIcon band={band} size={18} color={colors.onSoft} />
-      <AppText color={forecast ? theme.text : colors.onSoft} style={{ fontWeight: '600' }}>
+      <AppText color={forecast ? theme.text : colors.onSoft} style={{ fontWeight: '700' }}>
         {label}
       </AppText>
     </View>

@@ -7,7 +7,7 @@ import type { GymlyApi } from './api/types';
 
 export interface Services {
   api: GymlyApi;
-  /** Present only for the demo backend; a real API has nothing to control. */
+  /** Test-only scenario controls (see `api/demo.ts`); a real API has nothing to control. */
   demo: DemoControls | null;
   clock: AdjustableClock;
 }
@@ -22,7 +22,6 @@ export function createServices(options: { initialLinkedSiteId?: string | null } 
     clock,
     randomBytes: (n) => Crypto.getRandomBytes(n),
     initialLinkedSiteId: options.initialLinkedSiteId ?? null,
-    latencyMs: 120,
   });
   return { api, demo, clock };
 }

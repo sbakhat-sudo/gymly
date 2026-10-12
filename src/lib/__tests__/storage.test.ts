@@ -58,16 +58,16 @@ describe('typed storage', () => {
   });
 
   it('stores under a namespaced prefix', async () => {
-    await storage.set('demoMode', true);
-    expect(await AsyncStorage.getAllKeys()).toEqual([PREFIX + 'demoMode']);
+    await storage.set('guest', true);
+    expect(await AsyncStorage.getAllKeys()).toEqual([PREFIX + 'guest']);
   });
 
   it('remove deletes one key only', async () => {
     await storage.set('lang', 'it');
-    await storage.set('demoMode', true);
+    await storage.set('guest', true);
     await storage.remove('lang');
     expect(await storage.get('lang')).toBeUndefined();
-    expect(await storage.get('demoMode')).toBe(true);
+    expect(await storage.get('guest')).toBe(true);
   });
 
   it('clearAll wipes everything ("Cancella i miei dati")', async () => {

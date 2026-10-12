@@ -78,3 +78,4 @@ describe('nextGreenWindow', () => {
     expect(nextGreenWindow(f, minutes(18, 0), 4)).toMatchObject({ from: '20:15' });
   });
 });
+

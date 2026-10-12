@@ -1,8 +1,9 @@
 import type { Band, Confidence } from '@/schemas';
 
 /**
- * Knobs of the demo backend, driven by the Demo panel. They exist only to let a reviewer walk
- * through every state described in the spec; a real API implementation exposes no `DemoControls`.
+ * Knobs of the mock backend used by the automated tests to drive it into every state described in
+ * the spec (low confidence, offline, corrupt payload, etc.) without a real backend; a real API
+ * implementation exposes no `DemoControls`.
  */
 export interface MockScenario {
   /** Force the confidence level, or `auto` = computed from the site's adapter/calibration (§4.5). */

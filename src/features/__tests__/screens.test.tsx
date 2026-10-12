@@ -4,23 +4,20 @@
  * shows the right state for each scenario of the spec, and never shows a people count.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render, screen, userEvent, waitFor } from '@testing-library/react-native';
+import { act, render, screen, userEvent, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { DemoScreen } from '@/features/demo/DemoScreen';
+import { CheckInScreen } from '@/features/checkin/CheckInScreen';
 import { HomeScreen } from '@/features/home/HomeScreen';
 import { SettingsScreen } from '@/features/impostazioni/SettingsScreen';
 import { ScheduleScreen } from '@/features/orari/ScheduleScreen';
 import { PointsScreen } from '@/features/punti/PointsScreen';
 import { RedemptionScreen } from '@/features/punti/RedemptionScreen';
-import { AppStateProvider, useAppState, type BootState } from '@/lib/app-state';
+import type { BootState } from '@/lib/app-state';
+import { AppProviders } from '@/lib/app-providers';
 import { createAdjustableClock } from '@/lib/clock';
 import { createMockApi } from '@/lib/api/mock-api';
-import { I18nProvider } from '@/lib/i18n';
 import type { Services } from '@/lib/services';
-import { ServicesProvider } from '@/lib/services-context';
-import { SitesProvider } from '@/lib/sites-context';
 import { storage } from '@/lib/storage';
 
 jest.setTimeout(20_000); // the first render of a suite is slow (module loading)
@@ -64,6 +61,7 @@ interface Options {
   lang?: 'it' | 'en';
   now?: Date;
   sessionCount?: number;
+  themePref?: 'auto' | 'light' | 'dark';
 }
 
 function makeServices(o: Options): Services {
@@ -72,29 +70,25 @@ function makeServices(o: Options): Services {
   return { api, demo, clock };
 }
 
-function Localized({ children }: { children: ReactNode }) {
-  const { lang } = useAppState();
-  return <I18nProvider lang={lang}>{children}</I18nProvider>;
-}
-
+// Same component the real app renders (src/app/_layout.tsx) — a provider missing, removed or
+// reordered here would fail both at once, instead of only failing in production (see
+// src/app/__tests__/root-layout.test.tsx for the incident this closes).
 function tree(services: Services, o: Options, ui: ReactNode) {
   const boot: BootState = {
     lang: o.lang ?? 'it',
     siteId: o.siteId === undefined ? null : o.siteId,
     memberSiteId: o.memberSiteId ?? null,
     sessionCount: o.sessionCount ?? 1,
-    demoMode: false,
+    themePref: o.themePref ?? 'auto',
+    guest: false,
   };
   return (
-    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-      <AppStateProvider initial={boot}>
-        <Localized>
-          <ServicesProvider services={services}>
-            <SitesProvider>{ui}</SitesProvider>
-          </ServicesProvider>
-        </Localized>
-      </AppStateProvider>
-    </SafeAreaProvider>
+    <AppProviders
+      initial={boot}
+      createAppServices={() => services}
+      initialSafeAreaMetrics={{ frame: { x: 0, y: 0, width: 390, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+      {ui}
+    </AppProviders>
   );
 }
 
@@ -227,48 +221,90 @@ describe('Home', () => {
   it('shows the points chip only when the member is linked', async () => {
     await show(<HomeScreen />, { siteId: A });
     await hero(RED_HERO);
-    expect(screen.queryByText('330 punti')).toBeNull();
+    expect(screen.queryByLabelText('Hai 330 punti. Apri la sezione Punti')).toBeNull();
   });
 
   it('linked member: chip with the balance', async () => {
     await show(<HomeScreen />, { siteId: A, memberSiteId: A });
-    expect(await screen.findByText('330 punti')).toBeTruthy();
+    expect(await screen.findByLabelText('Hai 330 punti. Apri la sezione Punti')).toBeTruthy();
   });
 
   it('a gym without zones shows no zone card (site B)', async () => {
     await show(<HomeScreen />, { siteId: B });
-    await screen.findByText(/Affollata|Moderata|Libera/);
+    await screen.findAllByText(/Affollata|Moderata|Libera/);
     expect(screen.queryByText('Per zona')).toBeNull();
   });
 });
 
-describe('Schedule', () => {
-  it('renders the weekly grid legend, the selected day detail and the forecast note', async () => {
-    await show(<ScheduleScreen />, { siteId: A });
-    expect(await screen.findByText('Orari')).toBeTruthy();
-    expect(await screen.findByText('Dettaglio di lunedì')).toBeTruthy();
-    expect(screen.getByText('Fasce libere')).toBeTruthy();
-    expect(screen.getByText('Chiusa')).toBeTruthy();
-    expect(screen.getByText('Adesso')).toBeTruthy();
-    expect(screen.getByText(/mediana degli ultimi 8 stessi giorni/)).toBeTruthy();
+describe('Check-in', () => {
+  it('checking in switches the button to CHECK-OUT with an elapsed timer; checking out reverts it', async () => {
+    const user = userEvent.setup();
+    await show(<CheckInScreen />, { siteId: A });
+
+    await user.press(await screen.findByRole('button', { name: 'Fai check-in in Gymly Demo · Centro' }));
+    expect(await screen.findByText('CHECK-OUT')).toBeTruthy();
+    expect(screen.getByText('In palestra da')).toBeTruthy();
+    expectNoPeopleCount();
+
+    await user.press(screen.getByRole('button', { name: 'Fai check-out da Gymly Demo · Centro' }));
+    expect(await screen.findByText('CHECK-IN')).toBeTruthy();
+    expect(screen.queryByText('In palestra da')).toBeNull();
   });
 
-  it('tapping a day shows that day\'s detail', async () => {
+  it('after 90 minutes, asks "sei ancora in palestra?"; confirming keeps the check-in going', async () => {
     const user = userEvent.setup();
+    const services = await show(<CheckInScreen />, { siteId: A });
+    await user.press(await screen.findByRole('button', { name: 'Fai check-in in Gymly Demo · Centro' }));
+    await screen.findByText('CHECK-OUT');
+
+    await act(async () => services.clock.setOffsetMs(91 * 60_000));
+    expect(await screen.findByText('Sei ancora in palestra?')).toBeTruthy();
+
+    await user.press(screen.getByRole('button', { name: 'Sì, sono ancora qui' }));
+    await waitFor(() => expect(screen.queryByText('Sei ancora in palestra?')).toBeNull());
+    expect(screen.getByText('CHECK-OUT')).toBeTruthy();
+  });
+
+  it('auto checks out 105 minutes after check-in when the "sei ancora qui?" prompt is never answered', async () => {
+    const user = userEvent.setup();
+    const services = await show(<CheckInScreen />, { siteId: A });
+    await user.press(await screen.findByRole('button', { name: 'Fai check-in in Gymly Demo · Centro' }));
+    await screen.findByText('CHECK-OUT');
+
+    await act(async () => services.clock.setOffsetMs(106 * 60_000));
+    expect(await screen.findByText('CHECK-IN')).toBeTruthy();
+    expect(await screen.findByText(/Check-out automatico/)).toBeTruthy();
+  });
+});
+
+describe('Schedule', () => {
+  it('renders the day card, its legend, the free windows and the forecast note', async () => {
     await show(<ScheduleScreen />, { siteId: A });
-    await user.press(await screen.findByRole('button', { name: 'Mostra il dettaglio di sabato' }));
-    expect(await screen.findByText('Dettaglio di sabato')).toBeTruthy();
+    expect(await screen.findByText('Storico')).toBeTruthy();
+    expect(await screen.findByText('Affluenza registrata')).toBeTruthy();
+    expect(screen.getByText('Fasce libere · lunedì')).toBeTruthy();
+    for (const band of ['Libera', 'Moderata', 'Affollata']) expect(screen.getAllByText(band).length).toBeGreaterThan(0);
+    expect(screen.getByText(/ultimi 8 giorni simili/)).toBeTruthy();
+  });
+
+  it('tapping a day shows that day\'s free windows', async () => {
+    // Storico only opens days before "today" — Friday here so Wed (tapped) and Thu (the default,
+    // "yesterday") are both valid past days within the same fixed Mon–Sun strip.
+    const FRIDAY_1830 = new Date('2026-09-25T16:30:00Z');
+    const user = userEvent.setup();
+    await show(<ScheduleScreen />, { siteId: A, now: FRIDAY_1830 });
+    await user.press(await screen.findByRole('button', { name: 'Mostra il dettaglio di mercoledì' }));
+    expect(await screen.findByText('Fasce libere · mercoledì')).toBeTruthy();
   });
 
   it('a linked member sees the personal suggestion (spec §7 example format)', async () => {
     await show(<ScheduleScreen />, { siteId: A, memberSiteId: A });
     expect(await screen.findByText(/Di solito vieni martedì alle 18:30\. Alle \d\d:\d\d c’è il \d+% di gente in meno\./)).toBeTruthy();
-    expect(screen.getByText('Il tuo orario abituale')).toBeTruthy();
   });
 
   it('an anonymous member gets no personal suggestion', async () => {
     await show(<ScheduleScreen />, { siteId: A });
-    await screen.findByText('Dettaglio di lunedì');
+    await screen.findByText('Fasce libere · lunedì');
     expect(screen.queryByText('Per te')).toBeNull();
   });
 });
@@ -292,16 +328,18 @@ describe('Points', () => {
     await user.type(await screen.findByLabelText('Codice tessera'), 'demo1234');
     await user.press(screen.getByRole('button', { name: 'Collega la tessera' }));
 
-    expect(await screen.findByText('330 punti')).toBeTruthy();
+    // The big hero digit shows the bare number (design: number + a separate "Il tuo saldo" label), a11y label still says "330 punti".
+    expect(await screen.findByLabelText('330 punti')).toBeTruthy();
+    expect(screen.getByText('330')).toBeTruthy();
     // The five rules of the spec, spelled out, with the peak explicitly worth 0.
-    expect(screen.getByText('Lun–Ven · 06:00–09:00: 30 punti')).toBeTruthy();
-    expect(screen.getByText('Lun–Ven · 14:00–17:00: 50 punti')).toBeTruthy();
-    expect(screen.getByText('Lun–Ven · 21:00–chiusura: 50 punti')).toBeTruthy();
-    expect(screen.getByText('Sab–Dom · qualsiasi orario: 20 punti')).toBeTruthy();
-    expect(screen.getByText('Lun–Ven · 18:00–20:00 (ore di punta): 0 punti')).toBeTruthy();
+    expect(screen.getByLabelText('Lun–Ven · 06:00–09:00: 30 punti')).toBeTruthy();
+    expect(screen.getByLabelText('Lun–Ven · 14:00–17:00: 50 punti')).toBeTruthy();
+    expect(screen.getByLabelText('Lun–Ven · 21:00–chiusura: 50 punti')).toBeTruthy();
+    expect(screen.getByLabelText('Sab–Dom · qualsiasi orario: 20 punti')).toBeTruthy();
+    expect(screen.getByLabelText('Lun–Ven · 18:00–20:00 (ore di punta): 0 punti')).toBeTruthy();
     expect(screen.getByText('Se entri adesso: nessun punto (ora di punta o fuori fascia)')).toBeTruthy(); // Monday 18:30 = peak
     expect(screen.getByText('Seduta di PT in fascia libera')).toBeTruthy();
-    expect(screen.getByText(/Esaurito/)).toBeTruthy();
+    expect(screen.getAllByText(/Esaurito/).length).toBeGreaterThan(0);
     expect(screen.getByText('I premi sono servizi della palestra, non denaro.')).toBeTruthy();
   });
 
@@ -324,7 +362,7 @@ describe('Points', () => {
     expect(call.pathname).toBe('/redemption/[id]');
     expect(call.params.id).toMatch(/^rd_[0-9a-f]{12}$/);
     expect((await services.api.getPoints()).balance).toBe(210);
-    expect(await screen.findByText('210 punti')).toBeTruthy();
+    expect(await screen.findByLabelText('210 punti')).toBeTruthy();
   });
 
   it('cannot redeem what it cannot afford or what is out of stock', async () => {
@@ -337,7 +375,7 @@ describe('Points', () => {
 
   it('ledger movements carry an explicit sign (not colour only)', async () => {
     await show(<PointsScreen />, { siteId: A, memberSiteId: A });
-    await screen.findByText('330 punti');
+    await screen.findByLabelText('330 punti');
     expect(screen.getAllByText('+50').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Visita fuori picco').length).toBeGreaterThan(0);
   });
@@ -353,7 +391,7 @@ describe('Redemption screen', () => {
 
   it('shows a large QR plus the 6-character code for a pending redemption', async () => {
     const { code } = await withRedemption();
-    expect(await screen.findByText(code)).toBeTruthy();
+    expect(await screen.findByLabelText(`Codice: ${code.split('').join(' ')}`)).toBeTruthy();
     expect(screen.getByLabelText(`Codice di riscatto, codice ${code.split('').join(' ')}`.replace('Codice di riscatto, ', 'QR code del riscatto, '))).toBeTruthy();
     expect(screen.getByText('Mostra questo QR alla reception, oppure comunica il codice a voce.')).toBeTruthy();
     expect(screen.getByText('In attesa di validazione')).toBeTruthy();
@@ -375,7 +413,7 @@ describe('Redemption screen', () => {
     await services.demo?.validateRedemption(r.id);
     await render(tree(services, { siteId: A, memberSiteId: A }, <RedemptionScreen id={r.id} />));
     expect(await screen.findByText('Questo codice è già stato utilizzato.')).toBeTruthy();
-    expect(screen.queryByText(r.code)).toBeNull();
+    expect(screen.queryByLabelText(`Codice: ${r.code.split('').join(' ')}`)).toBeNull();
   });
 });
 
@@ -422,7 +460,7 @@ describe('Settings', () => {
     await show(<SettingsScreen />, { siteId: A, memberSiteId: A });
 
     await user.press(await screen.findByRole('button', { name: 'Cancella i miei dati' }));
-    expect(await screen.findByText('Cancellare tutti i dati?')).toBeTruthy();
+    expect(await screen.findByText('Cancellare i dati su questo dispositivo?')).toBeTruthy();
     // Cancelling changes nothing.
     await user.press(screen.getByRole('button', { name: 'Annulla' }));
     expect(await storage.get('siteId')).toBe(A);
@@ -436,55 +474,7 @@ describe('Settings', () => {
 
   it('shows the privacy note in Italian and the version', async () => {
     await show(<SettingsScreen />, { siteId: A });
-    expect(await screen.findByText(/Gymly non raccoglie dati personali/)).toBeTruthy();
+    expect(await screen.findByText(/Per usare Gymly serve un account/)).toBeTruthy();
     expect(screen.getByText(/Versione /)).toBeTruthy();
-  });
-});
-
-describe('Demo panel', () => {
-  it('drives the scenario of the mock backend', async () => {
-    const user = userEvent.setup();
-    const services = makeServices({ siteId: A });
-    await render(tree(services, { siteId: A }, <DemoScreen />));
-
-    await user.press(await screen.findByRole('radio', { name: 'Bassa' }));
-    expect(services.demo?.getScenario().confidence).toBe('low');
-
-    await user.press(screen.getByRole('radio', { name: 'Affollata' }));
-    expect(services.demo?.getScenario().band).toBe('red');
-
-    // A Switch reports changes through `valueChange`, not `press`.
-    await fireEvent(screen.getByRole('switch', { name: 'Offline (usa l’ultima cache)' }), 'valueChange', true);
-    expect(services.demo?.getScenario().offline).toBe(true);
-    await fireEvent(screen.getByRole('switch', { name: 'Adattatore giù (solo previsione)' }), 'valueChange', true);
-    expect(services.demo?.getScenario().adapterDown).toBe(true);
-    await fireEvent(screen.getByRole('switch', { name: 'Dato obsoleto (10 minuti)' }), 'valueChange', true);
-    expect(services.demo?.getScenario().staleSeconds).toBe(600);
-    await fireEvent(screen.getByRole('switch', { name: 'Risposta corrotta (deve essere scartata)' }), 'valueChange', true);
-    expect(services.demo?.getScenario().corruptPayload).toBe(true);
-
-    await user.press(screen.getByRole('button', { name: 'Ripristina tutto' }));
-    expect(services.demo?.getScenario()).toMatchObject({ confidence: 'auto', band: 'auto', offline: false, adapterDown: false, staleSeconds: null });
-  });
-
-  it('simulated time moves the clock to the chosen weekday and hour', async () => {
-    const user = userEvent.setup();
-    const services = makeServices({ siteId: A });
-    await render(tree(services, { siteId: A }, <DemoScreen />));
-    await user.press(await screen.findByRole('button', { name: 'Sab 11:00' }));
-    expect(services.clock.offsetMs()).not.toBe(0);
-    expect(await screen.findByText(/Ora simulata: Sab 11:00/)).toBeTruthy();
-    await user.press(screen.getByRole('button', { name: 'Reale' }));
-    expect(services.clock.offsetMs()).toBe(0);
-  });
-
-  it('links and unlinks a fictional member', async () => {
-    const user = userEvent.setup();
-    const services = makeServices({ siteId: A });
-    await render(tree(services, { siteId: A }, <DemoScreen />));
-    await user.press(await screen.findByRole('radio', { name: 'Collegato' }));
-    await waitFor(async () => expect(await services.api.getMe()).toEqual({ linked: true, site_id: A }));
-    await user.press(screen.getByRole('radio', { name: 'Non collegato' }));
-    await waitFor(async () => expect(await services.api.getMe()).toEqual({ linked: false }));
   });
 });

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { DEFAULT_ZONES, MOCK_SITES, type MockSiteDef, type MockZone } from '@/mocks/sites';
 import { MOCK_LEDGER_SEED, MOCK_POINT_RULES, MOCK_REWARDS, mockArrivals } from '@/mocks/member';
-import { expectedRatio, jitter } from '@/mocks/curve';
+import { expectedRatio, jitter } from '@/lib/domain/curve';
 import {
   ArrivalHistorySchema,
   ForecastSchema,
@@ -59,6 +59,8 @@ interface RedemptionRecord {
 
 const DAY_MS = 86_400_000;
 const IdempotencyKeySchema = z.string().min(8).max(64);
+/** Ratio nudge per open check-in: a plausible single extra person, never surfaced as a count. */
+const CHECKIN_RATIO_BUMP = 0.015;
 
 /** RFC 3339 UTC without milliseconds, as in the spec's examples. */
 const iso = (d: Date): string => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -74,6 +76,8 @@ export function createMockApi(options: MockApiOptions): { api: GymlyApi; demo: D
   const scenario = options.scenario ?? createScenarioStore();
 
   let linkedSiteId: string | null = options.initialLinkedSiteId ?? null;
+  /** Member-initiated check-ins currently "open" per site (§ checkIn/checkOut on GymlyApi). */
+  const checkedInCounts = new Map<string, number>();
   let ledger: LedgerEntry[] = [];
   let redemptions: RedemptionRecord[] = [];
   let idempotency = new Map<string, string>();
@@ -172,7 +176,8 @@ export function createMockApi(options: MockApiOptions): { api: GymlyApi; demo: D
 
     const open = openStatus(def.opening_hours, local.weekday, local.minutes).open;
     const noise = 1 + (jitter(`${siteId}|${local.dateKey}|${Math.floor(local.minutes / 5)}`) - 0.5) * 0.1;
-    const ratio = open ? Math.max(0, expectedRatio(local.weekday, local.minutes) * def.loadFactor * noise) : 0.02;
+    const checkinBump = (checkedInCounts.get(siteId) ?? 0) * CHECKIN_RATIO_BUMP;
+    const ratio = open ? Math.max(0, expectedRatio(local.weekday, local.minutes) * def.loadFactor * noise + checkinBump) : 0.02;
     const band: Band = sc.band !== 'auto' ? sc.band : bandFromRatio(ratio);
 
     const zones = zoneDefsFor(def).map((z) => ({
@@ -261,6 +266,20 @@ export function createMockApi(options: MockApiOptions): { api: GymlyApi; demo: D
     },
 
     getOccupancy,
+
+    async checkIn(siteId) {
+      await gate();
+      siteDef(siteId); // 404s on an unknown site, same as every other per-site call
+      checkedInCounts.set(siteId, (checkedInCounts.get(siteId) ?? 0) + 1);
+    },
+
+    async checkOut(siteId) {
+      await gate();
+      siteDef(siteId);
+      const current = checkedInCounts.get(siteId) ?? 0;
+      if (current <= 1) checkedInCounts.delete(siteId);
+      else checkedInCounts.set(siteId, current - 1);
+    },
 
     async getForecast(siteId, weekday) {
       await gate();

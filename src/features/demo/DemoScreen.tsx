@@ -12,7 +12,7 @@ import type { MockScenario } from '@/lib/api/demo';
 import { computeSimulationOffsetMs, formatTime, localTime } from '@/lib/domain/time';
 import { useNow } from '@/lib/hooks';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
-import { sendGreenAlert } from '@/lib/notifications';
+import { sendGreenAlert, sendProximityReminder } from '@/lib/notifications';
 import { useApi, useClock, useDemoControls } from '@/lib/services-context';
 import { useCurrentSite } from '@/lib/sites-context';
 import { storage } from '@/lib/storage';
@@ -51,7 +51,7 @@ function DemoPanel() {
   const router = useRouter();
   const api = useApi();
   const clock = useClock();
-  const { memberSiteId, setMemberSiteId, setSessionCount } = useAppState();
+  const { memberSiteId, setMemberSiteId } = useAppState();
   const { site } = useCurrentSite();
   const now = useNow(1000);
 
@@ -94,8 +94,20 @@ function DemoPanel() {
     setNotice(t((await sendGreenAlert(lang, site.name)) ? 'demo.notifications.sent' : 'demo.notifications.notSent'));
   }
 
+  async function fireProximity(): Promise<void> {
+    if (!site) return;
+    if ((await storage.get('checkinNotifOptIn')) !== true) {
+      setNotice(t('demo.notifications.needOptIn'));
+      return;
+    }
+    setNotice(t((await sendProximityReminder(lang, site.name)) ? 'demo.notifications.sent' : 'demo.notifications.notSent'));
+  }
+
   async function unlockSecondSession(): Promise<void> {
-    setSessionCount(2);
+    // No live setter for sessionCount (it's read-only, incremented once per real app boot) — write
+    // the stored value directly instead, same as valueSeen below. `demo.done` tells the tester to
+    // reopen the app, which is what actually re-reads it into AppState.
+    await storage.set('sessionCount', 2);
     await storage.set('valueSeen', true);
     setNotice(t('demo.done'));
   }
@@ -211,6 +223,14 @@ function DemoPanel() {
       </Card>
 
       <Card>
+        <SectionTitle>{t('demo.checkin')}</SectionTitle>
+        <Button label={t('demo.checkin.proximity')} variant="secondary" onPress={() => void fireProximity()} disabled={!site} />
+        <AppText variant="caption" muted>
+          {t('demo.checkin.proximityHint')}
+        </AppText>
+      </Card>
+
+      <Card>
         <SectionTitle>{t('demo.redemptions')}</SectionTitle>
         {pending.length === 0 ? <AppText muted>{t('demo.redemptions.empty')}</AppText> : null}
         {pending.map((r) => (
@@ -250,7 +270,7 @@ function ToggleRow({ label, value, onChange }: { label: string; value: boolean; 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: MIN_TAP }}>
       <AppText style={{ flex: 1 }}>{label}</AppText>
-      <Switch value={value} onValueChange={onChange} accessibilityLabel={label} trackColor={{ true: theme.primary, false: theme.border }} />
+      <Switch value={value} onValueChange={onChange} accessibilityLabel={label} trackColor={{ true: theme.primary, false: theme.switchOff }} />
     </View>
   );
 }

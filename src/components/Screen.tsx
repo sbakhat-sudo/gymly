@@ -1,30 +1,55 @@
 import type { ReactNode } from 'react';
-import { RefreshControl, ScrollView } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { decorativeA11yProps } from '@/lib/a11y';
+import { useSidebarInset } from '@/lib/sidebar-inset-context';
 import { spacing, useTheme } from '@/lib/theme';
+
+import { Orb } from './Orb';
+
+export interface ScreenOrb {
+  color: string;
+  /** Top of the glow, measured from the top of the scrolling content (below the safe area). */
+  top: number;
+  size: number;
+}
 
 interface ScreenProps {
   children: ReactNode;
   /** Pull-to-refresh (a manual, member-initiated refresh: nothing polls in the background). */
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** Aurora glow behind the content, horizontally centred; it scrolls with the page. */
+  orb?: ScreenOrb;
+  /** Caps the content column's width on wide windows (tablet / web). Defaults to 720 (a single
+   * readable column) unless the sidebar nav is showing (wide Manager/Coach/Admin web), where a
+   * 720px column would float as a narrow phone-shaped card in a sea of empty page — defaults to
+   * 1080 there instead. A public page meant to look like an actual website on desktop web
+   * (Benvenuto) passes a wider value explicitly, which always wins over either default. */
+  maxWidth?: number;
+  /** Space reserved below the content. Defaults to ~130 to clear the floating tab bar + its raised
+   * check-in button — every in-app tab sits above that bar. A pre-auth page (Benvenuto) has no tab
+   * bar at all, so it passes a much smaller value instead of leaving that gap as dead space. */
+  bottomPadding?: number;
 }
 
 /** Themed, safe-area-aware scrolling page used by every tab. */
-export function Screen({ children, onRefresh, refreshing = false }: ScreenProps) {
+export function Screen({ children, onRefresh, refreshing = false, orb, maxWidth, bottomPadding = 130 }: ScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const sidebarInset = useSidebarInset();
+  const resolvedMaxWidth = maxWidth ?? (sidebarInset > 0 ? 1080 : 720);
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: theme.background }}
+      style={{ flex: 1, backgroundColor: theme.background, paddingLeft: sidebarInset }}
       contentContainerStyle={{
-        paddingTop: insets.top + spacing.lg,
+        paddingTop: insets.top + spacing.md,
         paddingHorizontal: spacing.lg,
-        paddingBottom: spacing.xxl,
-        gap: spacing.lg,
+        paddingBottom: bottomPadding + insets.bottom,
+        gap: 14,
         // Keeps the content readable on wide windows (tablet / web preview).
-        maxWidth: 720,
+        maxWidth: resolvedMaxWidth,
         width: '100%',
         alignSelf: 'center',
       }}
@@ -33,6 +58,13 @@ export function Screen({ children, onRefresh, refreshing = false }: ScreenProps)
       refreshControl={
         onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} /> : undefined
       }>
+      {orb ? (
+        <View
+          {...decorativeA11yProps}
+          style={{ pointerEvents: 'none', position: 'absolute', top: insets.top + orb.top, left: 0, right: 0, height: orb.size, alignItems: 'center' }}>
+          <Orb color={orb.color} size={orb.size} />
+        </View>
+      ) : null}
       {children}
     </ScrollView>
   );

@@ -1,14 +1,18 @@
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
-import { Card, SectionTitle } from '@/components/Card';
+import { Card, SectionLabel, SectionTitle } from '@/components/Card';
+import { ChevronRightIcon, StarFilledIcon } from '@/components/icons';
+import { Orb } from '@/components/Orb';
+import { QrCode } from '@/components/QrCode';
 import { Screen } from '@/components/Screen';
 import { GymGate } from '@/features/common/GymGate';
+import { decorativeA11yProps } from '@/lib/a11y';
 import { useAppState } from '@/lib/app-state';
 import { isApiError } from '@/lib/api/errors';
 import { pointsForVisit } from '@/lib/domain/point-rules';
@@ -18,7 +22,7 @@ import { formatShortDate } from '@/lib/format';
 import { useDemoRevision, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/services-context';
-import { MIN_TAP, spacing, useTheme } from '@/lib/theme';
+import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 import type { LedgerReason, SiteSummary } from '@/schemas';
 
@@ -37,12 +41,14 @@ function PointsContent({ site }: { site: SiteSummary }) {
   const { memberSiteId } = useAppState();
 
   return (
-    <View style={{ gap: spacing.lg }}>
-      <View style={{ gap: spacing.xs }}>
+    <View style={{ gap: 14 }}>
+      <View style={{ gap: 6, paddingHorizontal: 4 }}>
         <AppText variant="headline" accessibilityRole="header">
           {t('points.title')}
         </AppText>
-        <AppText muted>{t('points.subtitle')}</AppText>
+        <AppText muted style={{ fontSize: 14, lineHeight: 20 }}>
+          {t('points.subtitle')}
+        </AppText>
       </View>
 
       {!site.capabilities.points ? (
@@ -128,45 +134,84 @@ function LinkedPoints({ site }: { site: SiteSummary }) {
   }
 
   const reasonKey = (r: LedgerReason) => `ledger.${r}` as const;
+  const codes = redemptions.data?.redemptions ?? [];
 
   return (
-    <View style={{ gap: spacing.lg }}>
-      <Card>
-        <AppText muted style={{ fontWeight: '600' }}>
+    <View style={{ gap: 14 }}>
+      <View style={{ borderRadius: radius.xxl, paddingVertical: spacing.xl, paddingHorizontal: 22, gap: 6, backgroundColor: theme.surface, overflow: 'hidden' }}>
+        <View {...decorativeA11yProps} style={{ pointerEvents: 'none', position: 'absolute', top: -110, right: -100, width: 300, height: 300 }}>
+          <Orb color={theme.accent} size={300} />
+        </View>
+        <AppText color={theme.textSoft} style={{ fontSize: 13, fontWeight: '600' }}>
           {t('points.balance')}
         </AppText>
-        <AppText variant="display" accessibilityLabel={t('points.balanceValue', { n: balance })}>
-          {t('points.balanceValue', { n: balance })}
+        <AppText
+          accessibilityLabel={t('points.balanceValue', { n: balance })}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          style={{ fontFamily: fontFamily.display, fontSize: 72, lineHeight: 76, letterSpacing: 72 * -0.07 }}>
+          {balance}
         </AppText>
-        <AppText muted>{nowWorth > 0 ? t('points.nowWorth', { n: nowWorth }) : t('points.nowWorthZero')}</AppText>
-      </Card>
+        <View
+          style={{
+            alignSelf: 'flex-start',
+            marginTop: spacing.sm,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingVertical: 7,
+            paddingHorizontal: 12,
+            borderRadius: radius.pill,
+            backgroundColor: theme.chip,
+          }}>
+          <StarFilledIcon color={theme.accent} size={13} />
+          <AppText style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', flexShrink: 1 }}>
+            {nowWorth > 0 ? t('points.nowWorth', { n: nowWorth }) : t('points.nowWorthZero')}
+          </AppText>
+        </View>
+      </View>
 
-      <Card>
-        <SectionTitle>{t('points.rules.title')}</SectionTitle>
+      <Card style={{ gap: 10 }}>
+        <SectionLabel>{t('points.rules.title')}</SectionLabel>
         {points.data.rules.map((rule) => {
           const days = describeDays(rule.weekday_mask, words);
-          const text =
-            rule.points === 0
-              ? t('points.rules.peak', { days, times: describeTimes(rule, words) })
-              : isAnyTime(rule)
-                ? t('points.rules.itemAny', { days, points: rule.points })
-                : t('points.rules.item', { days, times: describeTimes(rule, words), points: rule.points });
+          const peak = rule.points === 0;
+          const spoken = peak
+            ? t('points.rules.peak', { days, times: describeTimes(rule, words) })
+            : isAnyTime(rule)
+              ? t('points.rules.itemAny', { days, points: rule.points })
+              : t('points.rules.item', { days, times: describeTimes(rule, words), points: rule.points });
+          const when = peak
+            ? t('points.rules.whenPeak', { days, times: describeTimes(rule, words) })
+            : isAnyTime(rule)
+              ? t('points.rules.whenAny', { days })
+              : t('points.rules.when', { days, times: describeTimes(rule, words) });
+          const pill = peak ? theme.band.red : theme.band.green;
           return (
-            <AppText key={rule.id} style={{ minHeight: 24 }}>
-              {text}
-            </AppText>
+            <View key={rule.id} accessible accessibilityLabel={spoken} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 34 }}>
+              <AppText muted={peak} style={{ flex: 1, fontSize: 14, lineHeight: 19 }}>
+                {when}
+              </AppText>
+              <View style={{ minWidth: 44, alignItems: 'center', paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: radius.pill, backgroundColor: pill.soft }}>
+                <AppText color={pill.onSoft} style={{ fontFamily: fontFamily.mono, fontSize: 12, lineHeight: 16 }}>
+                  {peak ? '0' : `+${rule.points}`}
+                </AppText>
+              </View>
+            </View>
           );
         })}
-        <AppText variant="caption" muted>
+        <AppText color={theme.faint} style={{ fontSize: 11, lineHeight: 16 }}>
           {t('points.rules.footnote')}
         </AppText>
       </Card>
 
-      <Card>
-        <SectionTitle>{t('points.rewards.title')}</SectionTitle>
-        <AppText variant="caption" muted>
-          {t('points.rewards.note')}
-        </AppText>
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: spacing.md, paddingHorizontal: 4 }}>
+          <SectionTitle>{t('points.rewards.title')}</SectionTitle>
+          <AppText color={theme.faint} style={{ fontSize: 11, lineHeight: 15, flexShrink: 1, textAlign: 'right' }}>
+            {t('points.rewards.note')}
+          </AppText>
+        </View>
         {redeemError ? (
           <View accessibilityLiveRegion="polite">
             <AppText color={theme.danger} style={{ fontWeight: '600' }}>
@@ -174,61 +219,108 @@ function LinkedPoints({ site }: { site: SiteSummary }) {
             </AppText>
           </View>
         ) : null}
-        {(rewards.data?.rewards ?? []).map((reward) => {
-          const soldOut = reward.stock === 0;
-          const notEnough = balance < reward.cost;
-          return (
-            <View
-              key={reward.id}
-              style={{ gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: theme.border }}>
-              <AppText style={{ fontWeight: '700' }}>{reward.title}</AppText>
-              <AppText muted>
-                {t('points.rewards.cost', { n: reward.cost })} ·{' '}
-                {soldOut
-                  ? t('points.rewards.soldOut')
-                  : reward.stock === null
-                    ? t('points.rewards.unlimited')
-                    : t('points.rewards.stock', { n: reward.stock })}
-              </AppText>
-              <Button
-                label={t('points.redeem')}
-                accessibilityLabel={t('points.redeem.a11y', { title: reward.title, n: reward.cost })}
-                onPress={() => void redeem(reward.id)}
-                disabled={soldOut || notEnough || redeeming !== null}
-              />
-              {!soldOut && notEnough ? (
-                <AppText variant="caption" muted>
-                  {t('points.redeem.notEnough')}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {(rewards.data?.rewards ?? []).map((reward) => {
+            const soldOut = reward.stock === 0;
+            const notEnough = balance < reward.cost;
+            const disabled = soldOut || notEnough || redeeming !== null;
+            const reason = soldOut ? t('points.rewards.soldOut') : notEnough ? t('points.redeem.notEnough') : t('points.redeem');
+            return (
+              <View
+                key={reward.id}
+                style={{
+                  flexBasis: '46%',
+                  flexGrow: 1,
+                  borderRadius: 22,
+                  padding: 14,
+                  gap: 10,
+                  backgroundColor: theme.surface,
+                  opacity: soldOut ? 0.55 : 1,
+                }}>
+                <View style={{ alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 9, borderRadius: radius.pill, backgroundColor: theme.accent }}>
+                  <AppText color={theme.onAccent} style={{ fontSize: 11, lineHeight: 14, fontWeight: '700' }}>
+                    {t('points.rewards.cost', { n: reward.cost })}
+                  </AppText>
+                </View>
+                <AppText style={{ fontSize: 14, lineHeight: 18, fontWeight: '600', minHeight: 36 }}>{reward.title}</AppText>
+                <AppText muted style={{ fontSize: 11, lineHeight: 14 }}>
+                  {soldOut
+                    ? t('points.rewards.soldOut')
+                    : reward.stock === null
+                      ? t('points.rewards.unlimited')
+                      : t('points.rewards.stock', { n: reward.stock })}
                 </AppText>
-              ) : null}
-            </View>
-          );
-        })}
-      </Card>
+                <Pressable
+                  onPress={() => void redeem(reward.id)}
+                  disabled={disabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('points.redeem.a11y', { title: reward.title, n: reward.cost })}
+                  accessibilityHint={disabled && reason !== t('points.redeem') ? reason : undefined}
+                  accessibilityState={{ disabled }}
+                  style={({ pressed }) => ({
+                    minHeight: MIN_TAP,
+                    borderRadius: radius.pill,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: spacing.sm,
+                    backgroundColor: soldOut || notEnough ? theme.surfaceAlt : theme.text,
+                    opacity: pressed || (redeeming !== null && !soldOut && !notEnough) ? 0.75 : 1,
+                  })}>
+                  <AppText
+                    color={soldOut || notEnough ? theme.faint : theme.background}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={{ fontSize: soldOut || notEnough ? 13 : 14, fontWeight: soldOut || notEnough ? '600' : '700' }}>
+                    {reason}
+                  </AppText>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      </View>
 
-      {(redemptions.data?.redemptions.length ?? 0) > 0 ? (
-        <Card>
-          <SectionTitle>{t('points.codes.title')}</SectionTitle>
-          {redemptions.data?.redemptions.map((r) => (
-            <View key={r.id} style={{ gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: theme.border }}>
-              <AppText style={{ fontWeight: '700' }}>{r.reward_title}</AppText>
-              <AppText muted>
-                {t(`redemption.status.${r.status}`)}
-                {r.status === 'pending' ? ` · ${t('redemption.expires', { date: formatShortDate(lang, r.expires_at) })}` : ''}
-              </AppText>
-              <Button
-                label={t('redemption.title')}
-                accessibilityLabel={t('redemption.show', { title: r.reward_title })}
-                variant="secondary"
-                onPress={() => router.push({ pathname: '/redemption/[id]', params: { id: r.id } })}
-              />
-            </View>
-          ))}
-        </Card>
-      ) : null}
+      {codes.length > 0
+        ? codes.map((r) => (
+            <Pressable
+              key={r.id}
+              onPress={() => router.push({ pathname: '/redemption/[id]', params: { id: r.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={t('redemption.show', { title: r.reward_title })}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+                borderRadius: radius.card,
+                paddingVertical: spacing.lg,
+                paddingHorizontal: 18,
+                backgroundColor: theme.surface,
+                borderWidth: 1,
+                borderColor: theme.border,
+                opacity: pressed ? 0.85 : 1,
+              })}>
+              <View {...decorativeA11yProps} style={{ width: 40, height: 40, borderRadius: radius.md, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+                <QrCode value={r.qr} size={30} accessibilityLabel="" />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText muted style={{ fontSize: 11, lineHeight: 14, fontWeight: '600', letterSpacing: 11 * 0.06, textTransform: 'uppercase' }}>
+                  {t('points.codes.title')}
+                </AppText>
+                <AppText style={{ fontSize: 14, lineHeight: 19, fontWeight: '600' }}>{r.reward_title}</AppText>
+                <AppText muted style={{ fontSize: 12, lineHeight: 16 }}>
+                  {t(`redemption.status.${r.status}`)}
+                  {r.status === 'pending' ? ` · ${t('redemption.expires', { date: formatShortDate(lang, r.expires_at) })}` : ''}
+                </AppText>
+              </View>
+              <ChevronRightIcon color={theme.textMuted} size={16} strokeWidth={2.2} />
+            </Pressable>
+          ))
+        : null}
 
-      <Card>
-        <SectionTitle>{t('points.ledger.title')}</SectionTitle>
+      <Card style={{ gap: 0 }}>
+        <View style={{ marginBottom: 6 }}>
+          <SectionLabel>{t('points.ledger.title')}</SectionLabel>
+        </View>
         {points.data.ledger.length === 0 ? <AppText muted>{t('points.ledger.empty')}</AppText> : null}
         {points.data.ledger.slice(0, 15).map((entry) => (
           <View
@@ -236,7 +328,7 @@ function LinkedPoints({ site }: { site: SiteSummary }) {
             accessible
             accessibilityLabel={`${t(reasonKey(entry.reason))}, ${formatShortDate(lang, entry.created_at)}, ${entry.delta > 0 ? '+' : '−'}${Math.abs(entry.delta)}`}
             style={{
-              minHeight: MIN_TAP,
+              minHeight: 52,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -244,14 +336,16 @@ function LinkedPoints({ site }: { site: SiteSummary }) {
               borderTopWidth: 1,
               borderTopColor: theme.border,
             }}>
-            <View style={{ flex: 1 }}>
-              <AppText>{t(reasonKey(entry.reason))}</AppText>
-              <AppText variant="caption" muted>
+            <View style={{ flex: 1, gap: 1 }}>
+              <AppText style={{ fontSize: 14, lineHeight: 19 }}>{t(reasonKey(entry.reason))}</AppText>
+              <AppText color={theme.faint} style={{ fontSize: 12, lineHeight: 16 }}>
                 {formatShortDate(lang, entry.created_at)}
               </AppText>
             </View>
             {/* The sign is part of the text, so gain vs spend never relies on colour. */}
-            <AppText style={{ fontWeight: '700', fontVariant: ['tabular-nums'] }}>
+            <AppText
+              color={entry.delta > 0 ? theme.band.green.onSoft : theme.text}
+              style={{ fontFamily: fontFamily.mono, fontSize: 15, lineHeight: 20, fontVariant: ['tabular-nums'] }}>
               {entry.delta > 0 ? '+' : '−'}
               {Math.abs(entry.delta)}
             </AppText>

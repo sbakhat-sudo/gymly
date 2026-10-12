@@ -1,16 +1,39 @@
-import { Text, type TextProps } from 'react-native';
+import { StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
 
-import { MAX_FONT_SCALE, fontSize, useTheme } from '@/lib/theme';
+import { MAX_FONT_SCALE, fontFamily, fontSize, useTheme } from '@/lib/theme';
 
 export type TextVariant = 'display' | 'headline' | 'title' | 'body' | 'caption';
 
-const VARIANTS: Record<TextVariant, { fontSize: number; fontWeight: '400' | '600' | '700'; lineHeight: number }> = {
-  display: { fontSize: fontSize.display, fontWeight: '700', lineHeight: 52 },
-  headline: { fontSize: fontSize.headline, fontWeight: '700', lineHeight: 36 },
-  title: { fontSize: fontSize.title, fontWeight: '600', lineHeight: 28 },
+type Weight = NonNullable<TextStyle['fontWeight']>;
+
+/** Aurora type scale: Unbounded for display/headline/title, Geist for running text. */
+const VARIANTS: Record<TextVariant, { fontSize: number; fontWeight: Weight; lineHeight: number; letterSpacing?: number }> = {
+  display: { fontSize: fontSize.display, fontWeight: '700', lineHeight: 50, letterSpacing: fontSize.display * -0.05 },
+  headline: { fontSize: fontSize.headline, fontWeight: '700', lineHeight: 36, letterSpacing: fontSize.headline * -0.05 },
+  title: { fontSize: fontSize.title, fontWeight: '600', lineHeight: 24, letterSpacing: fontSize.title * -0.04 },
   body: { fontSize: fontSize.body, fontWeight: '400', lineHeight: 22 },
-  caption: { fontSize: fontSize.caption, fontWeight: '400', lineHeight: 18 },
+  caption: { fontSize: fontSize.caption, fontWeight: '500', lineHeight: 18 },
 };
+
+const DISPLAY_VARIANTS: ReadonlySet<TextVariant> = new Set(['display', 'headline', 'title']);
+
+/**
+ * Custom fonts ship one file per weight: asking for `fontWeight: '700'` on "Geist_400Regular" makes
+ * Android fall back to the system font and web synthesise a fake bold. So the weight picks the
+ * file, and `fontWeight` itself is dropped once a family is chosen.
+ */
+function familyFor(variant: TextVariant, weight: Weight | undefined): string {
+  const w = Number(weight === 'bold' ? 700 : weight === 'normal' || weight === undefined ? 400 : weight);
+  if (DISPLAY_VARIANTS.has(variant)) {
+    if (w >= 800) return fontFamily.displayHeavy;
+    if (w >= 700) return fontFamily.display;
+    return fontFamily.displaySemi;
+  }
+  if (w >= 700) return fontFamily.bodyBold;
+  if (w >= 600) return fontFamily.bodySemi;
+  if (w >= 500) return fontFamily.bodyMedium;
+  return fontFamily.body;
+}
 
 interface AppTextProps extends TextProps {
   variant?: TextVariant;
@@ -20,15 +43,24 @@ interface AppTextProps extends TextProps {
 }
 
 /**
- * The single text primitive: themed colour, type scale, and dynamic type honoured (the OS font
- * scale applies) but capped so the largest accessibility sizes cannot break layouts.
+ * The single text primitive: themed colour, Aurora type scale, and dynamic type honoured (the OS
+ * font scale applies) but capped so the largest accessibility sizes cannot break layouts.
+ * An explicit `fontFamily` in `style` (e.g. Geist Mono) wins over the variant's family.
  */
 export function AppText({ variant = 'body', muted = false, color, style, ...rest }: AppTextProps) {
   const theme = useTheme();
+  const base = VARIANTS[variant];
+  const flat = StyleSheet.flatten(style) ?? {};
+  const family = flat.fontFamily ?? familyFor(variant, flat.fontWeight ?? base.fontWeight);
   return (
     <Text
       maxFontSizeMultiplier={MAX_FONT_SCALE}
-      style={[VARIANTS[variant], { color: color ?? (muted ? theme.textMuted : theme.text) }, style]}
+      style={[
+        base,
+        { color: color ?? (muted ? theme.textMuted : theme.text) },
+        flat,
+        { fontFamily: family, fontWeight: undefined },
+      ]}
       {...rest}
     />
   );

@@ -8,7 +8,7 @@ import { useAppState } from '@/lib/app-state';
 import { isApiError } from '@/lib/api/errors';
 import { useI18n } from '@/lib/i18n';
 import { useApi } from '@/lib/services-context';
-import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
+import { MIN_TAP, fontFamily, spacing, useTheme } from '@/lib/theme';
 import { LinkCodeSchema, type SiteSummary } from '@/schemas';
 
 /**
@@ -65,10 +65,11 @@ export function LinkCard({ site }: { site: SiteSummary }) {
           minHeight: MIN_TAP + 4,
           borderWidth: 1.5,
           borderColor: problem ? theme.danger : theme.border,
-          borderRadius: radius.md,
+          borderRadius: 16,
           paddingHorizontal: spacing.lg,
           color: theme.text,
           backgroundColor: theme.background,
+          fontFamily: fontFamily.mono,
           fontSize: 18,
           letterSpacing: 2,
         }}
@@ -83,7 +84,7 @@ export function LinkCard({ site }: { site: SiteSummary }) {
       <AppText variant="caption" muted>
         {t('points.link.demoHint')}
       </AppText>
-      <Button label={t('points.link.button')} onPress={() => void submit()} disabled={busy || code.trim().length === 0} />
+      <Button label={t('points.link.button')} variant="invert" onPress={() => void submit()} disabled={busy || code.trim().length === 0} />
     </Card>
   );
 }

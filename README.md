@@ -35,6 +35,25 @@ npm run reset-project
 
 This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
+### Testing background geofencing
+
+The "you're near the gym" notification (`src/tasks/geofenceTask.ts`, registered by
+`src/hooks/useSyncGeofences.ts`) needs `expo-task-manager` + background location, neither of
+which **Expo Go** can run — Expo Go has no slot for the extra native module this requires, no
+amount of JS/config fixes that. In Expo Go the rest of the app works normally; only this one
+notification silently never fires (`geofenceTask.ts`'s own `isExpoGo` check skips registering the
+task at all, on purpose, rather than crashing).
+
+To actually test it, build and install an **EAS development build** instead:
+
+```bash
+npx eas build --profile development --platform ios    # or --platform android
+```
+
+then open that build (not Expo Go) and run `npx expo start --dev-client`. From there: grant
+location "Always" + notifications when prompted, walk into a gym's configured geofence radius
+(or set a mock GPS location in the device/simulator), and the local notification should fire.
+
 ### Other setup steps
 
 - To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { OccupancySchema, Rfc3339UtcSchema, SiteIdSchema, TimeOfDaySchema } from '@/schemas';
 
 import { isValidAlertWindow } from './domain/alerts';
+import { CheckinRecordSchema } from './domain/checkin';
 import { logger } from './logger';
 
 /**
@@ -31,10 +32,34 @@ export const STORAGE_SCHEMAS = {
   valueSeen: z.boolean(),
   /** Demo stand-in for "membership card linked" (a fictional id only; see `GymlyApi.getMe`). */
   memberSiteId: SiteIdSchema,
-  /** "Modalità demo" toggle in Settings (shows the Demo panel). */
-  demoMode: z.boolean(),
   /** Last occupancy payload, kept to show (clearly labelled) while offline. Contains no people count. */
   cachedOccupancy: z.object({ siteId: SiteIdSchema, savedAt: Rfc3339UtcSchema, payload: OccupancySchema }),
+  /** Present only while the member is checked in; removed (not set to a falsy value) on check-out. */
+  checkin: CheckinRecordSchema,
+  /** Check-in reminder notifications opt-in (separate from the "gym is quiet" alerts opt-in). */
+  checkinNotifOptIn: z.boolean(),
+  /** Identifiers of the currently scheduled check-in notifications, to cancel them on check-out/confirm. */
+  checkinNotificationIds: z.object({ stillHere: z.string().nullable(), autoCheckout: z.string().nullable() }),
+  /** Appearance: 'auto' follows the OS scheme and reacts live; 'light'/'dark' force it. */
+  themePref: z.enum(['auto', 'light', 'dark']),
+  /** "Guarda l'affluenza senza account" chosen on Benvenuto: the member app opens without signing in. */
+  guest: z.boolean(),
+  /** Role/gym choice collected on the signup screen, before the account exists. Replayed once a
+   * session is available (immediately, or after email confirmation) so the member never has to
+   * re-enter it; cleared right after. Coach/Client only — Manager has its own `pendingManagerPlan`. */
+  pendingRegistration: z.object({
+    role: z.enum(['client', 'coach']),
+    fullName: z.string(),
+    siteId: SiteIdSchema.nullable(),
+  }),
+  /** The plan (+ full name, same reason `pendingRegistration` keeps one) a prospective Manager
+   * picked on the signup screen, before the account exists. Replayed the same way as
+   * `pendingRegistration` once a session is available. */
+  pendingManagerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string() }),
+  /** The last geofence "you're near the gym" notification `geofenceTask.ts` actually sent —
+   * debounces it to at most once an hour. One fixed key, not one per site, is enough: a client
+   * belongs to exactly one gym (see `useSyncGeofences.ts`'s own comment on the same constraint). */
+  geofenceLastNotify: z.object({ siteId: SiteIdSchema, sentAt: Rfc3339UtcSchema }),
 } as const;
 
 export type StorageKey = keyof typeof STORAGE_SCHEMAS;
