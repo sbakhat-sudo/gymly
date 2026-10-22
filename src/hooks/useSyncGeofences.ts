@@ -47,7 +47,9 @@ export async function syncGeofences(): Promise<void> {
         identifier: profile.site_id,
         latitude: geo.lat,
         longitude: geo.lng,
-        radius: geo.radius,
+        // The proximity alert's own trigger distance (default 200m) — independent of `geo.radius`,
+        // which is the (tighter) check-in validation radius `check_in()` enforces server-side.
+        radius: geo.proximity_radius,
         notifyOnEnter: true,
         notifyOnExit: false,
       },

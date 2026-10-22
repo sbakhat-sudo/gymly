@@ -21,6 +21,7 @@ export function CreateGymScreen({ onDone }: { onDone: () => void }) {
   const theme = useTheme();
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [chainName, setChainName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +33,7 @@ export function CreateGymScreen({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await createGym(name, address);
+      await createGym(name, address, chainName);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : t('createGym.error'));
@@ -118,6 +119,22 @@ export function CreateGymScreen({ onDone }: { onDone: () => void }) {
                 accessibilityLabel={t('auth.signup.gymAddress')}
                 style={inputStyle}
               />
+            </View>
+            <View style={{ gap: spacing.sm }}>
+              <AppText variant="caption" style={{ fontWeight: '600' }}>
+                {t('auth.signup.gymChainName')}
+              </AppText>
+              <TextInput
+                value={chainName}
+                onChangeText={setChainName}
+                placeholder={t('auth.signup.gymChainName.placeholder')}
+                placeholderTextColor={theme.textMuted}
+                accessibilityLabel={t('auth.signup.gymChainName')}
+                style={inputStyle}
+              />
+              <AppText variant="caption" muted style={{ fontSize: 12, lineHeight: 17 }}>
+                {t('auth.signup.gymChainName.help')}
+              </AppText>
             </View>
 
             {error ? (

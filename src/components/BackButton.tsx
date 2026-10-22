@@ -7,8 +7,8 @@ import { MIN_TAP, useTheme } from '@/lib/theme';
 import { ChevronLeftIcon } from './icons';
 
 /**
- * Back arrow for a screen pushed outside its own tab group (Admin's Parametri/Comunicazioni/
- * Pagamento, reached from Impostazioni) — deliberately `router.replace(href)`, not `router.back()`:
+ * Back arrow for a screen pushed outside its own tab group (Admin's Comunicazioni/Pagamento,
+ * reached from Impostazioni) — deliberately `router.replace(href)`, not `router.back()`:
  * these pages are also opened directly by URL (dev testing, an F5 refresh), where there's no
  * navigation history to pop, so `back()` could leave the user stranded or bounce them out of the
  * app. `replace` always lands on a known screen, and never touches the session either way (no

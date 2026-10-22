@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { ChevronDownIcon } from '@/components/icons';
+import { ChevronDownIcon, ClockIcon } from '@/components/icons';
+import { PageTitle } from '@/components/PageTitle';
 import { allGreenWindows, nextGreenWindow } from '@/lib/domain/green-window';
 import { useI18n } from '@/lib/i18n';
 import { fontFamily, radius, spacing, useTheme } from '@/lib/theme';
@@ -49,9 +50,7 @@ export function ScheduleHeader({ gymName, subtitle }: { gymName: string; subtitl
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: 4 }}>
       <View style={{ gap: 4, flexShrink: 1 }}>
-        <AppText variant="headline" accessibilityRole="header" style={{ lineHeight: 32 }}>
-          {t('schedule.title')}
-        </AppText>
+        <PageTitle icon={ClockIcon} label={t('schedule.title')} circleSize={28} fontSize={36} />
         <AppText muted style={{ fontSize: 13, lineHeight: 17 }}>
           {(subtitle ?? t('schedule.subtitle')).replace(/\.$/, '')}
         </AppText>

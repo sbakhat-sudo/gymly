@@ -5,13 +5,12 @@ import { Pressable, View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { BandIcon } from '@/components/BandIcon';
 import { Banner } from '@/components/Banner';
-import { ChevronDownIcon, ChevronRightIcon, ClockIcon, StarFilledIcon } from '@/components/icons';
+import { ChevronDownIcon, ChevronRightIcon, ClockIcon } from '@/components/icons';
 import { LogoMark } from '@/components/Logo';
 import { Screen } from '@/components/Screen';
 import { GymGate } from '@/features/common/GymGate';
 import { BestMomentCard } from '@/features/orari/BestMomentCard';
 import { bestWindowFor } from '@/features/orari/ScheduleParts';
-import { useAppState } from '@/lib/app-state';
 import { nextGreenWindow } from '@/lib/domain/green-window';
 import { resolveHomeState } from '@/lib/domain/home-state';
 import { bucketOfMinutes, localTime, openStatus } from '@/lib/domain/time';
@@ -19,11 +18,9 @@ import { describeNextOpening } from '@/lib/format';
 import { useAppActive, useDemoRevision, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { useForecast } from '@/lib/queries';
-import { useApi } from '@/lib/services-context';
 import { useCurrentSite } from '@/lib/sites-context';
 import { storage } from '@/lib/storage';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
-import { useAsync } from '@/lib/use-async';
 import type { SiteSummary } from '@/schemas';
 
 import { HomeHero, type HeroView } from './HomeHero';
@@ -47,9 +44,7 @@ export function HomeScreen() {
 function HomeContent({ site }: { site: SiteSummary }) {
   const { t, lang, duration, band: bandLabel, weekday } = useI18n();
   const theme = useTheme();
-  const api = useApi();
   const router = useRouter();
-  const { memberSiteId } = useAppState();
 
   // Refresh only while the app is in the foreground AND this tab is visible.
   const appActive = useAppActive();
@@ -94,9 +89,6 @@ function HomeContent({ site }: { site: SiteSummary }) {
     site,
     lang
   );
-
-  const linked = memberSiteId === site.site_id && site.capabilities.points;
-  const points = useAsync(() => api.getPoints(), [api, linked, revision], linked);
 
   const loadingFirst = occupancy.loading && occupancy.occupancy === null;
   const offlineNoData = occupancy.failure === 'offline' && occupancy.occupancy === null;
@@ -155,33 +147,13 @@ function HomeContent({ site }: { site: SiteSummary }) {
               {clockLabel}
             </AppText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <AppText accessibilityRole="header" numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '600', flexShrink: 1 }}>
+              <AppText variant="display" accessibilityRole="header" numberOfLines={1} style={{ flexShrink: 1, fontSize: 36, lineHeight: 41, letterSpacing: 36 * -0.05 }}>
                 {site.name}
               </AppText>
-              <ChevronDownIcon color={theme.textMuted} size={13} strokeWidth={2.6} />
+              <ChevronDownIcon color={theme.textMuted} size={15} strokeWidth={2.6} />
             </View>
           </View>
         </Pressable>
-        {linked && points.data ? (
-          <Pressable
-            onPress={() => router.push('/punti')}
-            accessibilityRole="button"
-            accessibilityLabel={t('home.pointsChip.a11y', { n: points.data.balance })}
-            style={{
-              minHeight: MIN_TAP,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              paddingHorizontal: 13,
-              borderRadius: radius.pill,
-              backgroundColor: theme.glassBorder,
-              borderWidth: 1,
-              borderColor: theme.glassBorder,
-            }}>
-            <StarFilledIcon color={theme.accent} size={14} />
-            <AppText style={{ fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{points.data.balance}</AppText>
-          </Pressable>
-        ) : null}
       </View>
 
       {occupancy.source === 'cache' && occupancy.failure === 'offline' && occupancy.occupancy !== null ? (

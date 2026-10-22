@@ -5,10 +5,11 @@ import { ActionSheet, type ActionSheetAction } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
-import { ChevronRightIcon } from '@/components/icons';
+import { ChevronRightIcon, DumbbellIcon } from '@/components/icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { GeofenceFields, parseGeofenceFields } from '@/components/GeofenceFields';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
 import { useAsync } from '@/lib/use-async';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
@@ -54,6 +55,7 @@ export function AdminSitesScreen() {
   const [reassigning, setReassigning] = useState(false);
   const [choosingPlan, setChoosingPlan] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{ site: AdminSite; manager: AdminManagerOption } | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
 
   const [editingLocation, setEditingLocation] = useState(false);
   const [geoLat, setGeoLat] = useState('');
@@ -167,7 +169,22 @@ export function AdminSitesScreen() {
     ? [
         ...(sheetFor.approvalStatus !== 'active' ? [{ label: t('admin.sites.approve'), onPress: () => void act(sheetFor, 'active'), disabled: busyId === sheetFor.siteId }] : []),
         ...(sheetFor.approvalStatus !== 'suspended'
-          ? [{ label: t('admin.sites.suspend'), destructive: true, onPress: () => void act(sheetFor, 'suspended'), disabled: busyId === sheetFor.siteId }]
+          ? [
+              {
+                label: t('admin.sites.suspend'),
+                destructive: true,
+                onPress: () => {
+                  closeSheet();
+                  setPendingConfirm({
+                    title: t('admin.sites.suspend.confirm.title'),
+                    message: t('admin.sites.suspend.confirm.body', { site: sheetFor.name }),
+                    confirmLabel: t('admin.sites.suspend'),
+                    onConfirm: () => void act(sheetFor, 'suspended'),
+                  });
+                },
+                disabled: busyId === sheetFor.siteId,
+              },
+            ]
           : []),
         { label: t('admin.sites.reassign'), onPress: () => setReassigning(true), disabled: busyId === sheetFor.siteId },
         { label: t('admin.sites.changePlan'), onPress: () => setChoosingPlan(true), disabled: busyId === sheetFor.siteId },
@@ -175,7 +192,19 @@ export function AdminSitesScreen() {
         {
           label: t(sheetFor.managerStatus === 'rejected' ? 'admin.sites.managerReactivate' : 'admin.sites.managerDeactivate'),
           destructive: sheetFor.managerStatus !== 'rejected',
-          onPress: () => void toggleManagerStatus(sheetFor),
+          onPress: () => {
+            if (sheetFor.managerStatus === 'rejected') {
+              void toggleManagerStatus(sheetFor);
+              return;
+            }
+            closeSheet();
+            setPendingConfirm({
+              title: t('admin.sites.managerDeactivate.confirm.title'),
+              message: t('admin.sites.managerDeactivate.confirm.body', { manager: sheetFor.managerName ?? t('common.unnamedPerson') }),
+              confirmLabel: t('admin.sites.managerDeactivate'),
+              onConfirm: () => void toggleManagerStatus(sheetFor),
+            });
+          },
           disabled: busyId === sheetFor.siteId,
         },
       ]
@@ -184,9 +213,7 @@ export function AdminSitesScreen() {
   return (
     <Screen onRefresh={sites.reload} refreshing={sites.loading && sites.data !== undefined}>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.md }}>
-        <AppText variant="display" style={{ fontSize: 32 }}>
-          {t('admin.sites.pageTitle')}
-        </AppText>
+        <ScreenHeader icon={DumbbellIcon} label={t('admin.sites.pageTitle')} />
       </View>
 
       {sites.data ? (
@@ -197,6 +224,8 @@ export function AdminSitesScreen() {
             placeholder={t('admin.sites.search')}
             placeholderTextColor={theme.textMuted}
             accessibilityLabel={t('admin.sites.search')}
+            autoComplete="off"
+            textContentType="none"
             style={{
               flex: 1,
               minHeight: MIN_TAP,
@@ -227,7 +256,7 @@ export function AdminSitesScreen() {
       <ActionSheet
         visible={sheetFor !== null}
         title={sheetFor?.name ?? ''}
-        subtitle={sheetFor?.address ?? undefined}
+        subtitle={[sheetFor?.chainName, sheetFor?.address].filter(Boolean).join(' · ') || undefined}
         actions={reassigning || choosingPlan || editingLocation ? [] : sheetActions}
         onClose={closeSheet}>
         {sheetFor && reassigning ? (
@@ -275,6 +304,19 @@ export function AdminSitesScreen() {
         onConfirm={() => void confirmReassign()}
         onCancel={() => setConfirmTarget(null)}
       />
+
+      <ConfirmDialog
+        visible={pendingConfirm !== null}
+        destructive
+        title={pendingConfirm?.title ?? ''}
+        message={pendingConfirm?.message ?? ''}
+        confirmLabel={pendingConfirm?.confirmLabel ?? ''}
+        onConfirm={() => {
+          pendingConfirm?.onConfirm();
+          setPendingConfirm(null);
+        }}
+        onCancel={() => setPendingConfirm(null)}
+      />
     </Screen>
   );
 }
@@ -317,10 +359,19 @@ function SiteRow({ site, showDivider, onPress }: { site: AdminSite; showDivider:
         <AppText numberOfLines={1} variant="caption" muted>
           {t('admin.sites.managedBy', { name: site.managerName ?? t('common.unnamedPerson') })}
         </AppText>
-        <View style={{ flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 7, borderRadius: radius.pill, backgroundColor: planColor, alignSelf: 'flex-start' }}>
-          <AppText style={{ fontSize: 10, fontWeight: '800', color: theme.background, textTransform: 'uppercase', letterSpacing: 10 * 0.06 }}>
-            {t(PLAN_LABEL_KEY[site.plan])}
-          </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 7, borderRadius: radius.pill, backgroundColor: planColor }}>
+            <AppText style={{ fontSize: 10, fontWeight: '800', color: theme.background, textTransform: 'uppercase', letterSpacing: 10 * 0.06 }}>
+              {t(PLAN_LABEL_KEY[site.plan])}
+            </AppText>
+          </View>
+          {site.chainName ? (
+            <View style={{ flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 7, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border }}>
+              <AppText numberOfLines={1} style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted }}>
+                {site.chainName}
+              </AppText>
+            </View>
+          ) : null}
         </View>
       </View>
       <AppText variant="caption" style={{ fontWeight: '700', color: statusColor }}>
@@ -346,6 +397,8 @@ function ManagerPicker({ candidates, onPick }: { candidates: AdminManagerOption[
         placeholderTextColor={theme.textMuted}
         accessibilityLabel={t('admin.sites.reassign.search')}
         autoFocus
+        autoComplete="off"
+        textContentType="none"
         style={{
           minHeight: MIN_TAP,
           borderWidth: 1.5,

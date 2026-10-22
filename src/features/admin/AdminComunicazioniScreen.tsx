@@ -6,6 +6,8 @@ import { BackButton } from '@/components/BackButton';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { Card, SectionTitle } from '@/components/Card';
+import { BellIcon } from '@/components/icons';
+import { PageTitle } from '@/components/PageTitle';
 import { Screen } from '@/components/Screen';
 import { useI18n } from '@/lib/i18n';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
@@ -50,9 +52,7 @@ export function AdminComunicazioniScreen() {
     <Screen onRefresh={broadcasts.reload} refreshing={broadcasts.loading && broadcasts.data !== undefined}>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.md }}>
         <BackButton href="/(admin)/impostazioni" />
-        <AppText variant="display" style={{ fontSize: 32 }}>
-          {t('admin.broadcasts.title')}
-        </AppText>
+        <PageTitle icon={BellIcon} label={t('admin.broadcasts.title')} />
         <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
           {t('admin.broadcasts.subtitle')}
         </AppText>

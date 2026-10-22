@@ -7,7 +7,7 @@ import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { ChevronLeftIcon } from '@/components/icons';
 import { useAuth } from '@/lib/auth/auth-context';
-import { ManagerSignupScreen } from '@/features/auth/ManagerSignupScreen';
+import { OwnerSignupScreen } from '@/features/auth/OwnerSignupScreen';
 import type { ManagerPlan } from '@/features/auth/ManagerPlanCards';
 import { RoleAndSiteFields, submitRoleAndSite, useRoleAndSiteFields, type Role } from '@/features/auth/RoleAndSiteForm';
 import { useI18n } from '@/lib/i18n';
@@ -16,12 +16,14 @@ import { supabase } from '@/lib/supabase/client';
 import { MIN_TAP, fontFamily, spacing, useTheme } from '@/lib/theme';
 
 /** Coach never picks a role from a list, it reaches this screen through its own QR code/link,
- * which carries it as `?role=coach`. Manager has an entirely separate screen (a plan choice
- * first, then an Admin approval wait) — see ManagerSignupScreen.
+ * which carries it as `?role=coach`. Manager no longer self-registers at all (a Manager account is
+ * only ever created by an Owner, via "Aggiungi Manager") — the role this screen's public/web entry
+ * point now leads to is Owner ("Titolare"): a plan choice first, then an Admin approval wait, then
+ * creating their own business — see OwnerSignupScreen.
  *
  * Client is phone-only (Expo Go) — there is no "Cliente" option on web at all, self-serve or
- * not: a Manager's own gym is the only thing a stranger can sign up for from a browser, so a bare
- * web visit to this screen goes straight to ManagerSignupScreen instead of offering a role choice. */
+ * not: an Owner's own business is the only thing a stranger can sign up for from a browser, so a
+ * bare web visit to this screen goes straight to OwnerSignupScreen instead of offering a role choice. */
 function planFromParam(plan: string | string[] | undefined): ManagerPlan | undefined {
   const v = Array.isArray(plan) ? plan[0] : plan;
   return v === 'trial' || v === 'pro' || v === 'business' ? v : undefined;
@@ -32,12 +34,12 @@ export default function SignupScreen() {
   const isNative = Platform.OS !== 'web';
   const initialPlan = planFromParam(plan);
 
-  // Manager only signs up from a browser (same reasoning as the comment above for a bare native
-  // visit): on native, role=manager (even via a deep link) falls through to the Client form below
+  // Owner only signs up from a browser (same reasoning as the comment above for a bare native
+  // visit): on native, role=owner (even via a deep link) falls through to the Client form below
   // instead, exactly like no role param was given at all.
-  if (role === 'manager' && !isNative) return <ManagerSignupScreen initialPlan={initialPlan} />;
+  if (role === 'owner' && !isNative) return <OwnerSignupScreen initialPlan={initialPlan} />;
   if (role === 'coach') return <ClientOrCoachSignupScreen initialRole="coach" />;
-  if (!isNative) return <ManagerSignupScreen initialPlan={initialPlan} />;
+  if (!isNative) return <OwnerSignupScreen initialPlan={initialPlan} />;
 
   return <ClientOrCoachSignupScreen initialRole="client" />;
 }
@@ -111,15 +113,31 @@ function ClientOrCoachSignupScreen({ initialRole }: { initialRole: Role }) {
   return (
     <Screen>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.lg }}>
-        {router.canGoBack() ? (
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            style={{ width: MIN_TAP, height: MIN_TAP, borderRadius: MIN_TAP / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
-            <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
+        {/* Always rendered, not just when `router.canGoBack()` — reached with no navigation history
+            at all (a fresh deep link, e.g. a Coach's own QR code/link, or Expo Go reopening straight
+            to this route) otherwise left the screen with no way back except closing the app. Falls
+            back to the role-picker screen itself when there's truly nothing to go back to. Labelled
+            (not just an icon) and high-contrast on purpose, after an icon-only circle proved too easy
+            to miss in testing. */}
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          style={{
+            flexDirection: 'row',
+            alignSelf: 'flex-start',
+            alignItems: 'center',
+            gap: 6,
+            minHeight: MIN_TAP,
+            paddingHorizontal: spacing.md,
+            borderRadius: MIN_TAP / 2,
+            backgroundColor: theme.surfaceAlt,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+          }}>
+          <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
+          <AppText style={{ fontWeight: '700', fontSize: 15 }}>{t('common.back')}</AppText>
+        </Pressable>
 
         <AppText variant="display" style={{ fontSize: 40 }}>
           {t('auth.signup.title')}

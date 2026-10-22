@@ -1,10 +1,11 @@
 import { View } from 'react-native';
 
 import { AccountSection } from '@/components/AccountSection';
-import { AppText } from '@/components/AppText';
 import { Card, SectionLabel } from '@/components/Card';
+import { SlidersIcon } from '@/components/icons';
 import { ProfileSection } from '@/components/ProfileSection';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { Segmented } from '@/components/Segmented';
 import { SignOutButton } from '@/components/SignOutButton';
 import { useAppState } from '@/lib/app-state';
@@ -18,9 +19,7 @@ export function CoachSettingsScreen() {
   return (
     <Screen>
       <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-        <AppText variant="display" style={{ fontSize: 32 }}>
-          {t('settings.title')}
-        </AppText>
+        <ScreenHeader icon={SlidersIcon} label={t('settings.title')} />
         <SignOutButton />
       </View>
 

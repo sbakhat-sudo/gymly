@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 
+import { translate } from '@/lib/i18n';
 import { logger } from '@/lib/logger';
 import { storage } from '@/lib/storage';
 
@@ -54,10 +55,16 @@ if (Platform.OS !== 'web' && !isExpoGo) {
     const siteId = event.region.identifier;
     if (!siteId || !(await shouldNotify(siteId))) return;
 
+    // Lazily imported: `@/lib/supabase/client` pulls in `@supabase/supabase-js`, no reason to load it
+    // for every app boot just because this module is imported at the top of `_layout.tsx`.
+    const { supabase } = await import('@/lib/supabase/client');
+    const { data: site } = await supabase.from('sites').select('name').eq('site_id', siteId).maybeSingle();
+    const lang = (await storage.get('lang')) ?? 'it';
+
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Sei vicino alla palestra',
-        body: 'Fai il check-in!',
+        title: translate(lang, 'checkin.notification.proximity.title'),
+        body: translate(lang, 'checkin.notification.proximity.body', { name: site?.name ?? '' }),
         data: { url: '/(client)/checkin', siteId },
       },
       trigger: null,

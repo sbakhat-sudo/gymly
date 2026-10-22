@@ -5,10 +5,15 @@ import { Banner } from '@/components/Banner';
 import { GymBandHero } from '@/components/GymBandHero';
 import { LogoMark } from '@/components/Logo';
 import { Screen } from '@/components/Screen';
+import { PaymentDueBanner } from '@/features/billing/PaymentDueBanner';
+import { ClientNotifications } from '@/features/checkin/ClientNotifications';
 import { isGymOpenNow, useLiveGymBand, usePolledSiteStatus } from '@/lib/gym-status';
 import { useAppActive, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { spacing, useTheme } from '@/lib/theme';
+
+import { ResolvedIssueBanner } from './ResolvedIssueBanner';
+import { WeeklyGoalPopup } from './WeeklyGoalPopup';
 
 /**
  * A real (approved) Client's Live tab — the same `GymBandHero` as the Manager's "Situazione" and
@@ -51,12 +56,19 @@ export function RealClientLiveScreen({ siteId }: { siteId: string }) {
     <Screen orb={band ? { color: theme.band[band].solid, top: 40, size: 380 } : undefined}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <LogoMark size={38} bgColor={theme.background} bandColor={band ? theme.band[band].solid : theme.textMuted} />
-        <AppText accessibilityRole="header" numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '600', flexShrink: 1 }}>
+        <AppText variant="display" accessibilityRole="header" numberOfLines={1} style={{ flexShrink: 1, fontSize: 36, lineHeight: 41, letterSpacing: 36 * -0.05 }}>
           {site.name}
         </AppText>
+        <View style={{ marginLeft: 'auto' }}>
+          <ClientNotifications />
+        </View>
       </View>
 
       {loadingBand ? <ActivityIndicator style={{ marginVertical: spacing.xxl }} /> : <GymBandHero band={band} />}
+
+      <PaymentDueBanner />
+      <ResolvedIssueBanner />
+      <WeeklyGoalPopup />
     </Screen>
   );
 }

@@ -1,21 +1,35 @@
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
-import { Button } from '@/components/Button';
 import { Card, SectionTitle } from '@/components/Card';
-import { GeofenceFields, parseGeofenceFields } from '@/components/GeofenceFields';
-import { BellIcon, CheckIcon } from '@/components/icons';
+import { parseGeofenceFields } from '@/components/GeofenceFields';
+import { BellIcon, CheckIcon, ChevronRightIcon, HomeIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { Toggle } from '@/components/Toggle';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { EndTimeOfDaySchema, TimeOfDaySchema, type OpeningHours, type Weekday } from '@/schemas';
 
-import { getSiteGeofence, getSiteStatus, getSupportEmail, setManuallyOpen, setSiteCapacity, setSiteLocation, updateOpeningHours, type SiteStatus } from './manager-api';
+import { ManagerNotifications } from './ManagerNotifications';
+import { ManagerPositionCard } from './ManagerPositionCard';
+import {
+  getChainSites,
+  getPresentPeople,
+  getSiteGeofence,
+  getSiteStatus,
+  getSupportEmail,
+  setManuallyOpen,
+  setSiteLocation,
+  updateOpeningHours,
+  type ChainSites,
+  type SiteStatus,
+} from './manager-api';
 
 const WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 
@@ -28,11 +42,12 @@ interface DayRow {
   allDay: boolean;
 }
 
-/** The real, DST-aware current UTC offset for a timezone ("GMT+1"/"GMT+2") — never hardcoded, since
- * Rome's offset itself changes twice a year. */
+/** The real, DST-aware current offset for a timezone ("UTC+1"/"UTC+2") — never hardcoded, since
+ * Rome's offset itself changes twice a year. `Intl` labels this "GMT+1"; relabelled to the more
+ * familiar "UTC+1" (the same offset, just the conventional wording in Italian UI copy). */
 function tzOffsetLabel(timezone: string): string {
   const part = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName');
-  return part?.value ?? '';
+  return (part?.value ?? '').replace('GMT', 'UTC');
 }
 
 /** This screen only ever renders on web (Manager is a web-only role) — a plain `window.open` opens
@@ -128,6 +143,7 @@ export function ManagerGymScreen() {
   const { t, weekday } = useI18n();
   const theme = useTheme();
   const auth = useAuth();
+  const router = useRouter();
   const siteId = auth.status === 'active' ? auth.profile.siteId : null;
 
   const [status, setStatus] = useState<SiteStatus | null>(null);
@@ -143,12 +159,44 @@ export function ManagerGymScreen() {
   const [locating, setLocating] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationFeedback, setLocationFeedback] = useState<'saved' | 'error' | 'invalid' | 'permissionDenied' | null>(null);
-
-  const [capacity, setCapacity] = useState('');
-  const [savingCapacity, setSavingCapacity] = useState(false);
-  const [capacityFeedback, setCapacityFeedback] = useState<'saved' | 'error' | 'invalid' | null>(null);
+  // Only ever set by a real `getCurrentPositionAsync` fix (see `locateMe`) — `null` before that, read
+  // as "unknown" rather than fabricating a precision figure for coordinates that were typed by hand
+  // or loaded from a previous save.
+  const [accuracyM, setAccuracyM] = useState<number | null>(null);
+  const [gpsAvailable, setGpsAvailable] = useState<boolean | null>(null);
+  const [clientsPresent, setClientsPresent] = useState<number | null>(null);
 
   const [supportEmail, setSupportEmail] = useState<string | null>(null);
+  const [chainSites, setChainSites] = useState<ChainSites | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    Location.getForegroundPermissionsAsync()
+      .then((p) => alive && setGpsAvailable(p.granted))
+      .catch(() => alive && setGpsAvailable(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // "Clienti entro raggio" — the only honest real number for it: everyone currently checked in
+  // already passed the geofence check at check-in time, since nobody's position is tracked live.
+  useEffect(() => {
+    if (!siteId) return;
+    let alive = true;
+    const load = (): void => {
+      getPresentPeople(siteId).then(
+        (people) => alive && setClientsPresent(people.filter((p) => p.kind === 'client').length),
+        () => undefined
+      );
+    };
+    load();
+    const timer = setInterval(load, 20_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [siteId]);
 
   useEffect(() => {
     let alive = true;
@@ -161,12 +209,22 @@ export function ManagerGymScreen() {
   useEffect(() => {
     if (!siteId) return;
     let alive = true;
+    getChainSites(siteId)
+      .then((c) => alive && setChainSites(c))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [siteId]);
+
+  useEffect(() => {
+    if (!siteId) return;
+    let alive = true;
     getSiteStatus(siteId).then(
       (s) => {
         if (!alive) return;
         setStatus(s);
         setRows(rowsFromHours(s.openingHours));
-        setCapacity(String(s.capacityReference));
       },
       () => alive && setLoadError(true)
     );
@@ -230,6 +288,8 @@ export function ManagerGymScreen() {
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       setLat(String(position.coords.latitude));
       setLng(String(position.coords.longitude));
+      setAccuracyM(position.coords.accuracy);
+      setGpsAvailable(true);
     } catch {
       setLocationFeedback('error');
     } finally {
@@ -256,25 +316,6 @@ export function ManagerGymScreen() {
     }
   }
 
-  async function saveCapacity(): Promise<void> {
-    if (!siteId) return;
-    setCapacityFeedback(null);
-    const n = Number(capacity);
-    if (!Number.isInteger(n) || n < 1) {
-      setCapacityFeedback('invalid');
-      return;
-    }
-    setSavingCapacity(true);
-    try {
-      await setSiteCapacity(siteId, n);
-      setCapacityFeedback('saved');
-    } catch {
-      setCapacityFeedback('error');
-    } finally {
-      setSavingCapacity(false);
-    }
-  }
-
   if (loadError) {
     return (
       <Screen>
@@ -293,9 +334,7 @@ export function ManagerGymScreen() {
   return (
     <Screen>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.md, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <AppText variant="display" style={{ fontSize: 32, flexShrink: 1 }}>
-          {t('manager.opening.title')}
-        </AppText>
+        <ScreenHeader icon={HomeIcon} label={t('manager.opening.title')} notifications={<ManagerNotifications />} />
         <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
           {supportEmail ? (
             <Pressable
@@ -315,7 +354,26 @@ export function ManagerGymScreen() {
               <AppText style={{ fontWeight: '700' }}>{t('manager.gym.support')}</AppText>
             </Pressable>
           ) : null}
-          <Button label={t('manager.gym.hours.save')} onPress={() => void saveHours()} disabled={savingHours} />
+          <Pressable
+            onPress={() => void saveHours()}
+            disabled={savingHours}
+            accessibilityRole="button"
+            accessibilityLabel={t('manager.gym.hours.save')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              minHeight: 50,
+              paddingHorizontal: spacing.lg,
+              borderRadius: radius.pill,
+              backgroundColor: theme.primary,
+              opacity: savingHours ? 0.6 : 1,
+            }}>
+            <CheckIcon color={theme.onPrimary} size={16} strokeWidth={2.4} />
+            <AppText color={theme.onPrimary} style={{ fontWeight: '700' }}>
+              {t('manager.gym.hours.save')}
+            </AppText>
+          </Pressable>
         </View>
       </View>
 
@@ -327,14 +385,30 @@ export function ManagerGymScreen() {
       ) : null}
 
       <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <SectionTitle>{t('manager.gym.toggle.title')}</SectionTitle>
-            <AppText variant="caption" muted>
-              {t('manager.gym.toggle.help')}
-            </AppText>
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, flexWrap: 'wrap' }}>
+          <SectionTitle>{t('manager.gym.toggle.title')}</SectionTitle>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+                paddingHorizontal: spacing.md,
+                paddingVertical: 8,
+                borderRadius: radius.pill,
+                borderWidth: 1.5,
+                borderColor: theme.border,
+              }}>
+              <AppText variant="caption" muted style={{ fontWeight: '700', letterSpacing: 0.4 }}>
+                {t('manager.gym.toggle.open').toUpperCase()} / {t('manager.gym.toggle.closed').toUpperCase()}
+              </AppText>
+              <Toggle
+                value={status.manuallyOpen}
+                onValueChange={(v) => void toggleOpen(v)}
+                disabled={togglingOpen}
+                accessibilityLabel={t(status.manuallyOpen ? 'manager.gym.toggle.open' : 'manager.gym.toggle.closed')}
+              />
+            </View>
             <View
               style={{
                 paddingHorizontal: 10,
@@ -348,14 +422,11 @@ export function ManagerGymScreen() {
                 {t(status.manuallyOpen ? 'manager.gym.toggle.open' : 'manager.gym.toggle.closed')}
               </AppText>
             </View>
-            <Toggle
-              value={status.manuallyOpen}
-              onValueChange={(v) => void toggleOpen(v)}
-              disabled={togglingOpen}
-              accessibilityLabel={t(status.manuallyOpen ? 'manager.gym.toggle.open' : 'manager.gym.toggle.closed')}
-            />
           </View>
         </View>
+        <AppText variant="caption" muted>
+          {t('manager.gym.toggle.help')}
+        </AppText>
         <Banner message={t('manager.gym.toggle.info')} />
       </Card>
 
@@ -368,50 +439,61 @@ export function ManagerGymScreen() {
         </View>
         {WEEKDAYS.map((w) => {
           const row = rows[w];
+          const fieldsDisabled = row.closed || row.allDay;
           return (
-            <View key={w} style={{ gap: spacing.xs, paddingVertical: spacing.xs, borderTopWidth: w > 0 ? 1 : 0, borderTopColor: theme.border }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <AppText style={{ fontWeight: '600', textTransform: 'capitalize' }}>{weekday(w)}</AppText>
-                <Toggle
-                  value={!row.closed}
-                  onValueChange={(open) =>
-                    setRows({ ...rows, [w]: open ? { closed: false, opens: '09:00', closes: '18:00', allDay: false } : { closed: true, opens: '', closes: '', allDay: false } })
-                  }
-                  accessibilityLabel={`${weekday(w)}: ${t(row.closed ? 'manager.gym.hours.closedDay' : 'manager.gym.toggle.open')}`}
-                />
-              </View>
-              {!row.closed && !row.allDay ? (
-                <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <TimeField
-                      value={row.opens}
-                      onChange={(v) => setRows({ ...rows, [w]: { ...row, opens: v } })}
-                      accessibilityLabel={`${weekday(w)}: ${t('manager.gym.hours.opens')}`}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <TimeField
-                      value={row.closes}
-                      onChange={(v) => setRows({ ...rows, [w]: { ...row, closes: v } })}
-                      accessibilityLabel={`${weekday(w)}: ${t('manager.gym.hours.closes')}`}
-                    />
-                  </View>
+            <View
+              key={w}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+                paddingVertical: spacing.sm,
+                borderTopWidth: w > 0 ? 1 : 0,
+                borderTopColor: theme.border,
+                flexWrap: 'wrap',
+              }}>
+              <AppText style={{ fontWeight: '600', textTransform: 'capitalize', width: 92 }}>{weekday(w)}</AppText>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flex: 1, minWidth: 220 }}>
+                <View style={{ flex: 1 }}>
+                  <TimeField
+                    value={row.opens}
+                    onChange={(v) => setRows({ ...rows, [w]: { ...row, opens: v } })}
+                    accessibilityLabel={`${weekday(w)}: ${t('manager.gym.hours.opens')}`}
+                    disabled={fieldsDisabled}
+                  />
                 </View>
-              ) : null}
-              <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
-                <LabeledCheckbox
-                  checked={!row.closed && row.allDay}
-                  label={t('manager.gym.hours.allDay')}
-                  onToggle={() => setRows({ ...rows, [w]: row.closed ? { closed: false, opens: '00:00', closes: '24:00', allDay: true } : { ...row, allDay: !row.allDay } })}
-                />
-                <LabeledCheckbox
-                  checked={row.closed}
-                  label={t('manager.gym.hours.closedDay')}
-                  onToggle={() =>
-                    setRows({ ...rows, [w]: row.closed ? { closed: false, opens: '09:00', closes: '18:00', allDay: false } : { closed: true, opens: '', closes: '', allDay: false } })
-                  }
-                />
+                <AppText muted>–</AppText>
+                <View style={{ flex: 1 }}>
+                  <TimeField
+                    value={row.closes}
+                    onChange={(v) => setRows({ ...rows, [w]: { ...row, closes: v } })}
+                    accessibilityLabel={`${weekday(w)}: ${t('manager.gym.hours.closes')}`}
+                    disabled={fieldsDisabled}
+                  />
+                </View>
               </View>
+
+              <LabeledCheckbox
+                checked={!row.closed && row.allDay}
+                label={t('manager.gym.hours.allDay')}
+                onToggle={() => setRows({ ...rows, [w]: row.closed ? { closed: false, opens: '00:00', closes: '24:00', allDay: true } : { ...row, allDay: !row.allDay } })}
+              />
+              <LabeledCheckbox
+                checked={row.closed}
+                label={t('manager.gym.hours.closedDay')}
+                onToggle={() =>
+                  setRows({ ...rows, [w]: row.closed ? { closed: false, opens: '09:00', closes: '18:00', allDay: false } : { closed: true, opens: '', closes: '', allDay: false } })
+                }
+              />
+
+              <Toggle
+                value={!row.closed}
+                onValueChange={(open) =>
+                  setRows({ ...rows, [w]: open ? { closed: false, opens: '09:00', closes: '18:00', allDay: false } : { closed: true, opens: '', closes: '', allDay: false } })
+                }
+                accessibilityLabel={`${weekday(w)}: ${t(row.closed ? 'manager.gym.hours.closedDay' : 'manager.gym.toggle.open')}`}
+              />
             </View>
           );
         })}
@@ -424,78 +506,80 @@ export function ManagerGymScreen() {
         ) : null}
       </Card>
 
-      <Card>
-        <SectionTitle>{t('manager.gym.location.title')}</SectionTitle>
-        <AppText variant="caption" muted>
-          {t('manager.gym.location.help')}
-        </AppText>
+      <ManagerPositionCard
+        lat={lat}
+        onLatChange={setLat}
+        lng={lng}
+        onLngChange={setLng}
+        radiusM={radiusM}
+        onRadiusChange={setRadiusM}
+        accuracyM={accuracyM}
+        gpsAvailable={gpsAvailable}
+        clientsPresent={clientsPresent}
+        locating={locating}
+        saving={savingLocation}
+        onLocateMe={() => void locateMe()}
+        onSave={() => void saveLocation()}
+        feedback={locationFeedback}
+      />
 
-        <GeofenceFields lat={lat} onLatChange={setLat} lng={lng} onLngChange={setLng} radiusM={radiusM} onRadiusChange={setRadiusM} />
+      <Pressable
+        onPress={() => router.push('/capienza')}
+        accessibilityRole="button"
+        accessibilityLabel={t('manager.gym.capacity.navButton')}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.md,
+          padding: 18,
+          borderRadius: radius.card,
+          backgroundColor: theme.surface,
+        }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <SectionTitle>{t('manager.gym.capacity.navTitle')}</SectionTitle>
+          <AppText variant="caption" muted>
+            {t('manager.gym.capacity.navHelp')}
+          </AppText>
+        </View>
+        <ChevronRightIcon color={theme.textMuted} size={20} />
+      </Pressable>
 
-        <Button label={t('manager.gym.location.useMine')} variant="secondary" onPress={() => void locateMe()} disabled={locating} />
-
-        {locationFeedback ? (
-          <View accessibilityLiveRegion="polite">
-            <AppText color={locationFeedback === 'saved' ? theme.text : theme.danger} style={{ fontWeight: '600' }}>
-              {t(
-                locationFeedback === 'saved'
-                  ? 'manager.gym.location.saved'
-                  : locationFeedback === 'invalid'
-                    ? 'manager.gym.location.invalid'
-                    : locationFeedback === 'permissionDenied'
-                      ? 'manager.gym.location.permissionDenied'
-                      : 'manager.gym.location.error'
-              )}
-            </AppText>
+      {chainSites && chainSites.siblings.length > 0 ? (
+        <Card>
+          <SectionTitle>{t('manager.gym.chain.title', { name: chainSites.chainName })}</SectionTitle>
+          <AppText variant="caption" muted>
+            {t('manager.gym.chain.help')}
+          </AppText>
+          <View style={{ gap: spacing.sm }}>
+            {chainSites.siblings.map((s) => (
+              <View
+                key={s.siteId}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                  paddingVertical: spacing.sm,
+                  borderTopWidth: 1,
+                  borderTopColor: theme.border,
+                }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <AppText numberOfLines={1} style={{ fontWeight: '700' }}>
+                    {s.name}
+                  </AppText>
+                  {s.address ? (
+                    <AppText variant="caption" muted numberOfLines={1}>
+                      {s.address}
+                    </AppText>
+                  ) : null}
+                </View>
+                <AppText variant="caption" muted numberOfLines={1} style={{ maxWidth: 140, textAlign: 'right' }}>
+                  {s.managerName ?? t('common.unnamedPerson')}
+                </AppText>
+              </View>
+            ))}
           </View>
-        ) : null}
-
-        <Button label={t('manager.gym.location.save')} onPress={() => void saveLocation()} disabled={savingLocation} />
-      </Card>
-
-      <Card>
-        <SectionTitle>{t('manager.gym.capacity.title')}</SectionTitle>
-        <AppText variant="caption" muted>
-          {t('manager.gym.capacity.help')}
-        </AppText>
-
-        <TextInput
-          value={capacity}
-          onChangeText={(v) => {
-            setCapacity(v.replace(/[^0-9]/g, ''));
-            setCapacityFeedback(null);
-          }}
-          placeholder="50"
-          accessibilityLabel={t('manager.gym.capacity.title')}
-          keyboardType="number-pad"
-          style={{
-            minHeight: MIN_TAP,
-            borderWidth: 1.5,
-            borderColor: capacityFeedback === 'invalid' ? theme.danger : theme.border,
-            borderRadius: radius.md,
-            paddingHorizontal: spacing.md,
-            color: theme.text,
-            fontFamily: fontFamily.mono,
-            fontSize: 15,
-          }}
-        />
-
-        {capacityFeedback ? (
-          <View accessibilityLiveRegion="polite">
-            <AppText color={capacityFeedback === 'saved' ? theme.text : theme.danger} style={{ fontWeight: '600' }}>
-              {t(
-                capacityFeedback === 'saved'
-                  ? 'manager.gym.capacity.saved'
-                  : capacityFeedback === 'invalid'
-                    ? 'manager.gym.capacity.invalid'
-                    : 'manager.gym.capacity.error'
-              )}
-            </AppText>
-          </View>
-        ) : null}
-
-        <Button label={t('manager.gym.capacity.save')} onPress={() => void saveCapacity()} disabled={savingCapacity} />
-      </Card>
+        </Card>
+      ) : null}
     </Screen>
   );
 }

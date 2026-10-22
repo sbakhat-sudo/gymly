@@ -7,6 +7,7 @@ import { useSidebarInset } from '@/lib/sidebar-inset-context';
 import { spacing, useTheme } from '@/lib/theme';
 
 import { Orb } from './Orb';
+import { ROLE_TOP_BAR_HEIGHT } from './RoleTopBar';
 
 export interface ScreenOrb {
   color: string;
@@ -23,10 +24,11 @@ interface ScreenProps {
   /** Aurora glow behind the content, horizontally centred; it scrolls with the page. */
   orb?: ScreenOrb;
   /** Caps the content column's width on wide windows (tablet / web). Defaults to 720 (a single
-   * readable column) unless the sidebar nav is showing (wide Manager/Coach/Admin web), where a
-   * 720px column would float as a narrow phone-shaped card in a sea of empty page — defaults to
-   * 1080 there instead. A public page meant to look like an actual website on desktop web
-   * (Benvenuto) passes a wider value explicitly, which always wins over either default. */
+   * readable column) unless the sidebar nav is showing (wide Manager/Coach/Admin web), where this
+   * is a dashboard of cards/tables that should use the room it has rather than float as a capped
+   * column with dead space on either side — no cap there by default (fills whatever width the
+   * sidebar leaves it, on any window size). A public page meant to look like an actual website on
+   * desktop web (Benvenuto) passes a value explicitly, which always wins over either default. */
   maxWidth?: number;
   /** Space reserved below the content. Defaults to ~130 to clear the floating tab bar + its raised
    * check-in button — every in-app tab sits above that bar. A pre-auth page (Benvenuto) has no tab
@@ -39,12 +41,14 @@ export function Screen({ children, onRefresh, refreshing = false, orb, maxWidth,
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const sidebarInset = useSidebarInset();
-  const resolvedMaxWidth = maxWidth ?? (sidebarInset > 0 ? 1080 : 720);
+  const resolvedMaxWidth = maxWidth ?? (sidebarInset > 0 ? undefined : 720);
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background, paddingLeft: sidebarInset }}
       contentContainerStyle={{
-        paddingTop: insets.top + spacing.md,
+        // Sidebar mode (Manager/Coach/Admin web) also has a `RoleTopBar` fixed above the content —
+        // extra room so scrolling content starts below it instead of underneath it.
+        paddingTop: insets.top + spacing.md + (sidebarInset > 0 ? ROLE_TOP_BAR_HEIGHT + spacing.lg + spacing.md : 0),
         paddingHorizontal: spacing.lg,
         paddingBottom: bottomPadding + insets.bottom,
         gap: 14,

@@ -7,8 +7,9 @@ import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { Card, SectionLabel, SectionTitle } from '@/components/Card';
-import { ChevronRightIcon, StarFilledIcon } from '@/components/icons';
+import { ChevronRightIcon, StarFilledIcon, StarIcon } from '@/components/icons';
 import { Orb } from '@/components/Orb';
+import { PageTitle } from '@/components/PageTitle';
 import { QrCode } from '@/components/QrCode';
 import { Screen } from '@/components/Screen';
 import { GymGate } from '@/features/common/GymGate';
@@ -43,9 +44,7 @@ function PointsContent({ site }: { site: SiteSummary }) {
   return (
     <View style={{ gap: 14 }}>
       <View style={{ gap: 6, paddingHorizontal: 4 }}>
-        <AppText variant="headline" accessibilityRole="header">
-          {t('points.title')}
-        </AppText>
+        <PageTitle icon={StarIcon} label={t('points.title')} circleSize={28} fontSize={36} />
         <AppText muted style={{ fontSize: 14, lineHeight: 20 }}>
           {t('points.subtitle')}
         </AppText>

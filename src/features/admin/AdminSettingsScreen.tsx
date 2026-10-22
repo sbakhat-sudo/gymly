@@ -4,13 +4,15 @@ import { Pressable, View } from 'react-native';
 import { AccountSection } from '@/components/AccountSection';
 import { AppText } from '@/components/AppText';
 import { Card, SectionLabel } from '@/components/Card';
-import { BellIcon, ChevronRightIcon, CreditCardIcon, GearIcon } from '@/components/icons';
+import { GroupHeader } from '@/components/GroupHeader';
+import { BellIcon, ChevronRightIcon, ClockIcon, CreditCardIcon, EyeIcon, GearIcon, SlidersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { Segmented } from '@/components/Segmented';
 import { SignOutButton } from '@/components/SignOutButton';
 import { useAppState, type ThemePref } from '@/lib/app-state';
 import { useI18n, type Lang } from '@/lib/i18n';
-import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
+import { MIN_TAP, spacing, useTheme } from '@/lib/theme';
 
 type IconType = (p: { color: string; size: number }) => React.ReactElement;
 
@@ -21,27 +23,23 @@ export function AdminSettingsScreen() {
   return (
     <Screen>
       <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-        <AppText variant="display" style={{ fontSize: 32 }}>
-          {t('settings.title')}
-        </AppText>
+        <ScreenHeader icon={SlidersIcon} label={t('settings.title')} />
         <SignOutButton />
       </View>
 
-      {/* Each a separate, standalone section — not grouped into one list, so "Pagamento" reads as
-          its own area rather than a sub-item of "Parametri". */}
-      <SectionLabel>{t('admin.billing.title')}</SectionLabel>
-      <Card>
+      {/* Grouped by theme (platform config vs. security/logs) instead of one standalone Card per
+          item — the flat list of near-identical single-row cards was the actual "disordinato"
+          complaint: everything read as equally important with no structure to scan. */}
+      <GroupHeader icon={GearIcon} label={t('admin.settings.platform')} />
+      <Card style={{ padding: 0, gap: 0 }}>
         <NavRow href="/pagamento" label={t('admin.billing.title')} icon={CreditCardIcon} />
+        <NavRow href="/comunicazioni" label={t('admin.broadcasts.title')} icon={BellIcon} last />
       </Card>
 
-      <SectionLabel>{t('admin.params.title')}</SectionLabel>
-      <Card>
-        <NavRow href="/parametri" label={t('admin.params.title')} icon={GearIcon} />
-      </Card>
-
-      <SectionLabel>{t('admin.broadcasts.title')}</SectionLabel>
-      <Card>
-        <NavRow href="/comunicazioni" label={t('admin.broadcasts.title')} icon={BellIcon} />
+      <GroupHeader icon={EyeIcon} label={t('admin.settings.security')} />
+      <Card style={{ padding: 0, gap: 0 }}>
+        <NavRow href="/audit-gps" label={t('admin.gpsAudit.title')} icon={EyeIcon} />
+        <NavRow href="/azioni-admin" label={t('admin.actionsLog.fullTitle')} icon={ClockIcon} last />
       </Card>
 
       <Card>
@@ -79,7 +77,7 @@ export function AdminSettingsScreen() {
   );
 }
 
-function NavRow({ href, label, icon: Icon }: { href: Href; label: string; icon: IconType }) {
+function NavRow({ href, label, icon: Icon, last = false }: { href: Href; label: string; icon: IconType; last?: boolean }) {
   const theme = useTheme();
   const router = useRouter();
   return (
@@ -92,8 +90,9 @@ function NavRow({ href, label, icon: Icon }: { href: Href; label: string; icon: 
         alignItems: 'center',
         gap: spacing.sm,
         minHeight: MIN_TAP + 6,
-        paddingHorizontal: spacing.sm,
-        borderRadius: radius.md,
+        paddingHorizontal: spacing.md,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: theme.border,
       }}>
       <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
         <Icon color={theme.text} size={16} />

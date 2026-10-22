@@ -1,21 +1,38 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Animated, Easing, Platform, Pressable, View, type ViewStyle } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { Fragment, useEffect, useState } from 'react';
+import { Animated, Easing, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { FadeSlideIn } from '@/components/FadeSlideIn';
-import { BellIcon, CheckIcon, CreditCardIcon, DumbbellIcon, PulseIcon, UsersIcon, XIcon } from '@/components/icons';
-import { Orb } from '@/components/Orb';
+import { GroupHeader } from '@/components/GroupHeader';
+import { CheckIcon, ChevronDownIcon, ClockIcon, CreditCardIcon, DumbbellIcon, InboxIcon, PulseIcon, UsersIcon, XIcon } from '@/components/icons';
+import { NotificationBell } from '@/components/NotificationBell';
 import { Screen } from '@/components/Screen';
 import { decorativeA11yProps } from '@/lib/a11y';
+import { formatRelativeTime } from '@/lib/format';
 import { useReduceMotion } from '@/lib/hooks';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
+import { usePageHeader } from '@/lib/page-header-context';
 import { fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
+import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
-import { getOverview, getSites, getSitesGrowth, setSiteStatus, type AdminSite, type MonthCount, type SitePlan } from './admin-api';
+import { AdminActionRow } from './AdminActionRow';
+import {
+  getActionsLog,
+  getOverview,
+  getPendingManagers,
+  getSites,
+  getSitesGrowth,
+  setManagerStatus,
+  setSiteStatus,
+  type AdminSite,
+  type MonthCount,
+  type PendingManager,
+  type SitePlan,
+} from './admin-api';
 
 type IconType = (p: { color: string; size: number }) => React.ReactElement;
 
@@ -31,12 +48,22 @@ const PLAN_COLOR: Record<SitePlan, (theme: ReturnType<typeof useTheme>) => strin
   pro: (theme) => theme.primary,
   business: (theme) => theme.band.amber.solid,
 };
+/** The readable text colour for each slice's own "{pct}%" label — `pro`/`business` reuse the
+ * theme's already-contrast-tested `onPrimary`/`band.amber.onSolid` pairs (amber in particular needs
+ * this: it's a bright yellow in dark mode, where white text would fail, not the dark brown it is in
+ * light mode); `trial`'s fill is a plain mid-grey with no built-in "on" partner, so `background` — the
+ * theme's own lightest/darkest extreme — stands in instead. */
+const PLAN_LABEL_COLOR: Record<SitePlan, (theme: ReturnType<typeof useTheme>) => string> = {
+  trial: (theme) => theme.background,
+  pro: (theme) => theme.onPrimary,
+  business: (theme) => theme.band.amber.onSolid,
+};
 
 /** Small colour-tinted icon badge, the "some colour" accent on every KPI/chart card header. */
-function IconBadge({ icon: Icon, tint }: { icon: IconType; tint: string }) {
+function IconBadge({ icon: Icon, tint, size = 26 }: { icon: IconType; tint: string; size?: number }) {
   return (
-    <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: `${tint}22`, alignItems: 'center', justifyContent: 'center' }}>
-      <Icon color={tint} size={14} />
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: `${tint}22`, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon color={tint} size={Math.round(size * 0.54)} />
     </View>
   );
 }
@@ -47,17 +74,26 @@ export function AdminDashboardScreen() {
   const router = useRouter();
   const overview = useAsync(() => getOverview(), []);
   const sites = useAsync(() => getSites(), []);
+  const pendingManagers = useAsync(() => getPendingManagers(), []);
   const growth = useAsync(() => getSitesGrowth(12), []);
+  const actionsLog = useAsync(() => getActionsLog(12), []);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionTab, setActionTab] = useState<'sites' | 'managers'>('sites');
+  const isSidebar = useSidebarMode();
+  // This screen's own header (icon + title + subtitle + pending-approvals bell) is custom, not the
+  // shared `PageTitle`/`ScreenHeader` — kept as-is below for narrow/native. Sidebar mode's fixed
+  // `RoleTopBar` still needs a title while this tab is active.
+  usePageHeader(PulseIcon, t('admin.dashboard.title'));
 
   const pending = sites.data?.filter((s) => s.approvalStatus === 'pending_approval') ?? [];
 
   function reloadAll(): void {
     overview.reload();
     sites.reload();
+    pendingManagers.reload();
   }
 
-  async function approve(site: AdminSite): Promise<void> {
+  async function approveSite(site: AdminSite): Promise<void> {
     setBusyId(site.siteId);
     try {
       await setSiteStatus(site.siteId, 'active');
@@ -67,29 +103,60 @@ export function AdminDashboardScreen() {
     }
   }
 
+  async function approveManager(manager: PendingManager): Promise<void> {
+    setBusyId(manager.userId);
+    try {
+      await setManagerStatus(manager.userId, 'active');
+      reloadAll();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <Screen onRefresh={reloadAll} refreshing={(overview.loading || sites.loading) && overview.data !== undefined}>
-      <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md }}>
-        <View style={{ gap: 4, flex: 1 }}>
-          <AppText style={{ fontFamily: fontFamily.display, fontSize: 32, lineHeight: 36, letterSpacing: 32 * -0.03 }}>{t('admin.dashboard.title')}</AppText>
-          <AppText muted style={{ fontSize: 14 }}>
-            {t('admin.dashboard.subtitle')}
-          </AppText>
+      {!isSidebar ? (
+        <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md }}>
+          <View style={{ gap: 4, flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <IconBadge icon={PulseIcon} tint={theme.primary} size={32} />
+              <AppText style={{ fontFamily: fontFamily.display, fontSize: 32, lineHeight: 36, letterSpacing: 32 * -0.03 }}>{t('admin.dashboard.title')}</AppText>
+            </View>
+            <AppText muted style={{ fontSize: 14 }}>
+              {t('admin.dashboard.subtitle')}
+            </AppText>
+          </View>
+          <NotificationBell
+            count={(overview.data?.sitesPending ?? 0) + (overview.data?.managersPending ?? 0)}
+            onPress={() => router.push('/(admin)/manager')}
+            accessibilityLabel={(overview.data?.sitesPending ?? 0) + (overview.data?.managersPending ?? 0) > 0 ? t('admin.dashboard.pendingApprovals') : t('admin.dashboard.title')}
+          />
         </View>
-        <NotificationBell count={(overview.data?.sitesPending ?? 0) + (overview.data?.managersPending ?? 0)} onPress={() => router.push('/(admin)/manager')} />
-      </View>
+      ) : null}
 
       {overview.error ? <Banner title={t('admin.sites.error')} /> : null}
 
       {overview.data ? (
         <FadeSlideIn>
-          <HeroCard count={overview.data.sitesPending} pending={pending} busyId={busyId} onApprove={approve} onPress={() => router.push('/(admin)/palestre')} />
+          <View style={{ gap: spacing.sm }}>
+            <GroupHeader icon={InboxIcon} label={t('admin.dashboard.group.action')} />
+            <ActionHeroCard
+              sitesPending={pending}
+              managersPending={pendingManagers.data ?? []}
+              tab={actionTab}
+              onTabChange={setActionTab}
+              busyId={busyId}
+              onApproveSite={approveSite}
+              onApproveManager={approveManager}
+              onSeeAll={() => router.push('/(admin)/manager')}
+            />
+          </View>
         </FadeSlideIn>
       ) : null}
 
       {overview.data ? (
         <>
-          <GroupHeader icon={DumbbellIcon} label={t('admin.dashboard.group.sites')} />
+          <GroupHeader icon={DumbbellIcon} label={t('admin.dashboard.group.status')} />
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <KpiCard
               index={0}
@@ -116,19 +183,6 @@ export function AdminDashboardScreen() {
               onPress={() => router.push('/(admin)/palestre')}
             />
           </View>
-
-          {growth.data ? (
-            <FadeSlideIn delay={140}>
-              <TrendLineCard title={t('admin.dashboard.growth.title')} tint={theme.primary} data={growth.data} onPress={() => router.push('/(admin)/palestre')} />
-            </FadeSlideIn>
-          ) : null}
-
-          {sites.data ? (
-            <FadeSlideIn delay={210}>
-              <PlanPieChart sites={sites.data} onPress={() => router.push('/(admin)/palestre')} />
-            </FadeSlideIn>
-          ) : null}
-
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <KpiCard
               index={3}
@@ -136,171 +190,297 @@ export function AdminDashboardScreen() {
               tint={theme.primary}
               label={t('admin.overview.managersTotal')}
               value={overview.data.managersTotal}
-              wide
               onPress={() => router.push('/(admin)/manager')}
             />
-          </View>
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <KpiCard
               index={4}
               icon={CheckIcon}
               tint={theme.band.green.solid}
               label={t('admin.overview.managersActive')}
               value={overview.data.managersActive}
-              wide
               onPress={() => router.push('/(admin)/manager')}
             />
-          </View>
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <KpiCard
               index={5}
               icon={XIcon}
-              tint={theme.danger}
+              tint={theme.textMuted}
               label={t('admin.overview.managersInactive')}
               value={overview.data.managersTotal - overview.data.managersActive}
-              wide
               onPress={() => router.push('/(admin)/manager')}
             />
           </View>
         </>
       ) : null}
+
+      <GroupHeader icon={PulseIcon} label={t('admin.dashboard.group.activity')} />
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg }}>
+        {sites.data ? (
+          <View style={{ flex: 1, minWidth: 280 }}>
+            <FadeSlideIn delay={140}>
+              <PlanPieChart sites={sites.data} onPress={() => router.push('/(admin)/palestre')} />
+            </FadeSlideIn>
+          </View>
+        ) : null}
+
+        {growth.data ? (
+          <View style={{ flex: 1, minWidth: 280 }}>
+            <FadeSlideIn delay={210}>
+              <TrendLineCard title={t('admin.dashboard.growth.title')} tint={theme.primary} data={growth.data} onPress={() => router.push('/(admin)/palestre')} />
+            </FadeSlideIn>
+          </View>
+        ) : null}
+      </View>
+
+      {actionsLog.error ? <Banner title={t('admin.actionsLog.error')} /> : null}
+      {actionsLog.data ? (
+        <FadeSlideIn delay={260}>
+          <View style={{ gap: spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <GroupHeader icon={ClockIcon} label={t('admin.actionsLog.title')} />
+              <AppText accessibilityRole="link" onPress={() => router.push('/azioni-admin')} style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>
+                {t('admin.actionsLog.seeAll')}
+              </AppText>
+            </View>
+            {actionsLog.data.length === 0 ? (
+              <AppText muted style={{ fontSize: 14 }}>
+                {t('admin.actionsLog.empty')}
+              </AppText>
+            ) : (
+              <View style={{ borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>
+                {actionsLog.data.map((entry, i, rows) => (
+                  <AdminActionRow key={entry.id} entry={entry} last={i === rows.length - 1} />
+                ))}
+              </View>
+            )}
+          </View>
+        </FadeSlideIn>
+      ) : null}
     </Screen>
   );
 }
 
-/** Bell shortcut to the thing the admin most needs to act on right now (pending gym approvals). */
-function NotificationBell({ count, onPress }: { count: number; onPress: () => void }) {
-  const { t } = useI18n();
-  const theme = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={count > 0 ? t('admin.dashboard.pendingApprovals') : t('admin.dashboard.title')}
-      style={({ pressed }) => ({
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.glass,
-        borderWidth: 1,
-        borderColor: theme.glassBorder,
-        opacity: pressed ? 0.85 : 1,
-      })}>
-      <BellIcon color={theme.text} size={20} />
-      {count > 0 ? (
-        <View
-          {...decorativeA11yProps}
-          style={{
-            position: 'absolute',
-            top: 6,
-            right: 7,
-            width: 11,
-            height: 11,
-            borderRadius: 6,
-            backgroundColor: theme.danger,
-            borderWidth: 1.5,
-            borderColor: theme.background,
-          }}
-        />
-      ) : null}
-    </Pressable>
-  );
-}
-
-function GroupHeader({ icon: Icon, label }: { icon: IconType; label: string }) {
-  const theme = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.sm }}>
-      <Icon color={theme.textMuted} size={14} />
-      <AppText muted style={{ fontSize: 12, fontWeight: '700', letterSpacing: 12 * 0.08, textTransform: 'uppercase' }}>
-        {label}
-      </AppText>
-    </View>
-  );
-}
-
-function HeroCard({
-  count,
-  pending,
+/**
+ * "ACTION" hero — a gradient card (the app's own `primary`→`primaryDeep` pair, the one gradient this
+ * design system already defines, instead of inventing a one-off orange/red) with a tabbed request
+ * list (sites / managers) so both kinds of pending approval live in one place, each row offering an
+ * inline "Approva" (acts immediately, no navigation) and "Dettagli" (opens the full Richieste page,
+ * where every pending item already has its own detail sheet — no need to duplicate that here).
+ */
+function ActionHeroCard({
+  sitesPending,
+  managersPending,
+  tab,
+  onTabChange,
   busyId,
-  onApprove,
-  onPress,
+  onApproveSite,
+  onApproveManager,
+  onSeeAll,
 }: {
-  count: number;
-  pending: AdminSite[];
+  sitesPending: AdminSite[];
+  managersPending: PendingManager[];
+  tab: 'sites' | 'managers';
+  onTabChange: (tab: 'sites' | 'managers') => void;
   busyId: string | null;
-  onApprove: (site: AdminSite) => void;
-  onPress: () => void;
+  onApproveSite: (site: AdminSite) => void;
+  onApproveManager: (manager: PendingManager) => void;
+  onSeeAll: () => void;
 }) {
   const { t } = useI18n();
   const theme = useTheme();
-  const calm = count === 0;
-  const glow = calm ? theme.band.green.solid : theme.band.amber.solid;
+  const total = sitesPending.length + managersPending.length;
 
   return (
-    <View style={{ borderRadius: 30, padding: 20, gap: 14, backgroundColor: theme.surface, overflow: 'hidden' }}>
-      <View {...decorativeA11yProps} style={{ pointerEvents: 'none', position: 'absolute', top: -110, right: -90, width: 280, height: 280 }}>
-        <Orb color={glow} size={280} />
+    // `backgroundColor` here is a deliberate fallback, not decoration: the gradient below is an SVG
+    // fill layered on top via `absoluteFill`, and an SVG `<LinearGradient>` on web can fail to paint
+    // (a hydration/timing glitch, not something this app's own code controls) while the white
+    // `onPrimary` text above it still renders fine — the card then reads as a near-invisible "washed
+    // out" block instead of the blue hero it's meant to be. A solid `theme.primary` base underneath
+    // means that failure mode degrades to "flat blue instead of a gradient", never to unreadable text.
+    <View style={{ borderRadius: 30, padding: 20, gap: 14, overflow: 'hidden', backgroundColor: theme.primary }}>
+      <View {...decorativeA11yProps} pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Svg width="100%" height="100%">
+          <Defs>
+            <LinearGradient id="adminActionHero" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0%" stopColor={theme.primary} />
+              <Stop offset="100%" stopColor={theme.primaryDeep} />
+            </LinearGradient>
+          </Defs>
+          <Rect x={0} y={0} width="100%" height="100%" fill="url(#adminActionHero)" />
+        </Svg>
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
-        <AppText muted accessibilityRole="header" style={{ fontSize: 12, fontWeight: '700', letterSpacing: 12 * 0.08, textTransform: 'uppercase' }}>
-          {t('admin.dashboard.pendingApprovals')}
-        </AppText>
-        <AppText
-          accessibilityRole="link"
-          onPress={onPress}
-          style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <InboxIcon color={theme.onPrimary} size={13} />
+          <AppText
+            color={theme.onPrimary}
+            style={{ opacity: 0.85, fontSize: 12, fontWeight: '700', letterSpacing: 12 * 0.08, textTransform: 'uppercase' }}>
+            {t('admin.dashboard.action.heroTitle')}
+          </AppText>
+        </View>
+        <AppText accessibilityRole="link" onPress={onSeeAll} color={theme.onPrimary} style={{ fontWeight: '700', fontSize: 13 }}>
           {t('admin.dashboard.pendingApprovals.seeAll')}
         </AppText>
       </View>
 
       <AppText
+        color={theme.onPrimary}
         maxFontSizeMultiplier={1.3}
         style={{ fontFamily: fontFamily.display, fontSize: 58, lineHeight: 58, letterSpacing: 58 * -0.07, fontVariant: ['tabular-nums'] }}>
-        {count}
+        {total}
       </AppText>
 
-      {calm ? (
-        <AppText muted style={{ fontSize: 14 }}>
-          {t('admin.dashboard.pendingApprovals.empty')}
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        {(
+          [
+            { key: 'sites' as const, icon: DumbbellIcon, label: t('admin.dashboard.action.tab.sites', { n: sitesPending.length }) },
+            { key: 'managers' as const, icon: UsersIcon, label: t('admin.dashboard.action.tab.managers', { n: managersPending.length }) },
+          ] as const
+        ).map((opt) => {
+          const selected = opt.key === tab;
+          const OptIcon = opt.icon;
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => onTabChange(opt.key)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected, checked: selected }}
+              accessibilityLabel={opt.label}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                minHeight: 36,
+                paddingHorizontal: 14,
+                borderRadius: radius.pill,
+                backgroundColor: selected ? theme.surface : 'transparent',
+                borderWidth: selected ? 0 : 1.5,
+                borderColor: 'rgba(255,255,255,0.55)',
+              }}>
+              <OptIcon color={selected ? theme.primary : theme.onPrimary} size={14} />
+              <AppText color={selected ? theme.text : theme.onPrimary} style={{ fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
+                {opt.label}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {tab === 'sites' ? (
+        sitesPending.length === 0 ? (
+          <AppText color={theme.onPrimary} style={{ opacity: 0.85, fontSize: 14 }}>
+            {t('admin.dashboard.action.empty.sites')}
+          </AppText>
+        ) : (
+          <View style={{ gap: spacing.sm }}>
+            {sitesPending.slice(0, 3).map((s) => (
+              <RequestRow
+                key={s.siteId}
+                icon={DumbbellIcon}
+                title={s.name}
+                subtitle={t('admin.dashboard.action.request.site')}
+                createdAt={s.createdAt}
+                busy={busyId === s.siteId}
+                onApprove={() => onApproveSite(s)}
+                onDetails={onSeeAll}
+              />
+            ))}
+          </View>
+        )
+      ) : managersPending.length === 0 ? (
+        <AppText color={theme.onPrimary} style={{ opacity: 0.85, fontSize: 14 }}>
+          {t('admin.dashboard.action.empty.managers')}
         </AppText>
       ) : (
         <View style={{ gap: spacing.sm }}>
-          {pending.slice(0, 3).map((s) => (
-            <View key={s.siteId} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
-              <AppText style={{ fontSize: 15, fontWeight: '600', flex: 1 }} numberOfLines={1}>
-                {s.name}
-              </AppText>
-              <Pressable
-                onPress={() => onApprove(s)}
-                disabled={busyId === s.siteId}
-                accessibilityRole="button"
-                accessibilityLabel={`${t('admin.sites.approve')}: ${s.name}`}
-                style={({ pressed }) => ({
-                  height: 36,
-                  paddingHorizontal: 16,
-                  borderRadius: radius.pill,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.text,
-                  opacity: busyId === s.siteId ? 0.5 : pressed ? 0.85 : 1,
-                })}>
-                <AppText color={theme.background} style={{ fontSize: 13, fontWeight: '700' }}>
-                  {t('admin.sites.approve')}
-                </AppText>
-              </Pressable>
-            </View>
+          {managersPending.slice(0, 3).map((m) => (
+            <RequestRow
+              key={m.userId}
+              icon={UsersIcon}
+              title={m.fullName ?? t('common.unnamedPerson')}
+              subtitle={t('admin.dashboard.action.request.manager')}
+              createdAt={m.createdAt}
+              busy={busyId === m.userId}
+              onApprove={() => onApproveManager(m)}
+              onDetails={onSeeAll}
+            />
           ))}
-          {pending.length > 3 ? (
-            <AppText variant="caption" muted>
-              {t('admin.dashboard.pendingApprovals.more', { count: pending.length - 3 })}
-            </AppText>
-          ) : null}
         </View>
       )}
+    </View>
+  );
+}
+
+/** Opaque white card, not translucent-over-gradient — reads as its own "item", the way each named
+ * request sits as a distinct little card on top of the hero in the reference design. */
+function RequestRow({
+  icon,
+  title,
+  subtitle,
+  createdAt,
+  busy,
+  onApprove,
+  onDetails,
+}: {
+  icon: IconType;
+  title: string;
+  subtitle: string;
+  createdAt: string;
+  busy: boolean;
+  onApprove: () => void;
+  onDetails: () => void;
+}) {
+  const { t, lang } = useI18n();
+  const theme = useTheme();
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.sm }}>
+      <IconBadge icon={icon} tint={theme.primary} size={34} />
+      <View style={{ flex: 1, gap: 1 }}>
+        <AppText numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: theme.text }}>
+          {title}
+        </AppText>
+        <AppText variant="caption" muted numberOfLines={1}>
+          {subtitle} · {formatRelativeTime(lang, createdAt)}
+        </AppText>
+      </View>
+      <Pressable
+        onPress={onApprove}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={`${t('admin.sites.approve')}: ${title}`}
+        style={({ pressed }) => ({
+          height: 34,
+          paddingHorizontal: 14,
+          borderRadius: radius.pill,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.band.green.solid,
+          opacity: busy ? 0.5 : pressed ? 0.85 : 1,
+        })}>
+        <AppText color={theme.band.green.onSolid} style={{ fontSize: 12.5, fontWeight: '700' }}>
+          {t('admin.sites.approve')}
+        </AppText>
+      </Pressable>
+      <Pressable
+        onPress={onDetails}
+        accessibilityRole="button"
+        accessibilityLabel={`${t('admin.dashboard.action.details')}: ${title}`}
+        style={({ pressed }) => ({
+          height: 34,
+          paddingHorizontal: 14,
+          borderRadius: radius.pill,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 1.5,
+          borderColor: theme.border,
+          opacity: pressed ? 0.7 : 1,
+        })}>
+        <AppText color={theme.text} style={{ fontSize: 12.5, fontWeight: '700' }}>
+          {t('admin.dashboard.action.details')}
+        </AppText>
+      </Pressable>
     </View>
   );
 }
@@ -308,9 +488,9 @@ function HeroCard({
 const PIE_SIZE = 150;
 const PIE_R = PIE_SIZE / 2;
 
-function polarPoint(angleDeg: number): { x: number; y: number } {
+function polarPoint(angleDeg: number, r: number = PIE_R): { x: number; y: number } {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: PIE_R + PIE_R * Math.cos(rad), y: PIE_R + PIE_R * Math.sin(rad) };
+  return { x: PIE_R + r * Math.cos(rad), y: PIE_R + r * Math.sin(rad) };
 }
 
 function pieSlicePath(startAngle: number, endAngle: number): string {
@@ -318,6 +498,12 @@ function pieSlicePath(startAngle: number, endAngle: number): string {
   const end = polarPoint(endAngle);
   const largeArc = endAngle - startAngle > 180 ? 1 : 0;
   return `M${PIE_R},${PIE_R} L${start.x},${start.y} A${PIE_R},${PIE_R} 0 ${largeArc} 1 ${end.x},${end.y} Z`;
+}
+
+/** Where a slice's own "{pct}%" label sits — partway out from the centre (not jammed against the
+ * middle, not crowding the outer edge), at the slice's own mid-angle. */
+function pieLabelPoint(startAngle: number, endAngle: number): { x: number; y: number } {
+  return polarPoint((startAngle + endAngle) / 2, PIE_R * 0.64);
 }
 
 /** Real per-plan gym split (trial/pro/business) as a pie, with a text+colour legend (never colour alone). */
@@ -365,11 +551,27 @@ function PlanPieChart({ sites, onPress }: { sites: AdminSite[]; onPress: () => v
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
           <Svg width={PIE_SIZE} height={PIE_SIZE} viewBox={`0 0 ${PIE_SIZE} ${PIE_SIZE}`}>
             {slices.length === 1 ? (
-              <Circle cx={PIE_R} cy={PIE_R} r={PIE_R - 1} fill={PLAN_COLOR[slices[0]?.plan ?? 'trial'](theme)} />
+              <>
+                <Circle cx={PIE_R} cy={PIE_R} r={PIE_R - 1} fill={PLAN_COLOR[slices[0]?.plan ?? 'trial'](theme)} />
+                <SvgText x={PIE_R} y={PIE_R + 5} textAnchor="middle" fontSize={16} fontWeight="700" fill={PLAN_LABEL_COLOR[slices[0]?.plan ?? 'trial'](theme)}>
+                  100%
+                </SvgText>
+              </>
             ) : (
-              slices.map((s) => (
-                <Path key={s.plan} d={pieSlicePath(s.start, s.end)} fill={PLAN_COLOR[s.plan](theme)} stroke={theme.background} strokeWidth={2} strokeLinejoin="round" />
-              ))
+              slices.map((s) => {
+                const pct = Math.round((counts[s.plan] / total) * 100);
+                const label = pieLabelPoint(s.start, s.end);
+                return (
+                  <Fragment key={s.plan}>
+                    <Path d={pieSlicePath(s.start, s.end)} fill={PLAN_COLOR[s.plan](theme)} stroke={theme.background} strokeWidth={2} strokeLinejoin="round" />
+                    {pct >= 6 ? (
+                      <SvgText x={label.x} y={label.y + 4} textAnchor="middle" fontSize={12} fontWeight="700" fill={PLAN_LABEL_COLOR[s.plan](theme)}>
+                        {pct}%
+                      </SvgText>
+                    ) : null}
+                  </Fragment>
+                );
+              })
             )}
           </Svg>
           <View style={{ gap: spacing.sm, flex: 1 }}>
@@ -472,7 +674,6 @@ function KpiCard({
   tint,
   label,
   value,
-  wide = false,
   onPress,
 }: {
   index: number;
@@ -480,7 +681,6 @@ function KpiCard({
   tint: string;
   label: string;
   value: number;
-  wide?: boolean;
   onPress: () => void;
 }) {
   const theme = useTheme();
@@ -506,7 +706,7 @@ function KpiCard({
   const glow: ViewStyle = Platform.OS === 'web' ? ({ boxShadow: `0 8px 24px -12px rgba(0,0,0,0.25)` } as ViewStyle) : {};
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }, { scale }], flexGrow: wide ? 1 : undefined, flexBasis: wide ? '100%' : 0, flex: wide ? undefined : 1 }}>
+    <Animated.View style={{ opacity, transform: [{ translateY }, { scale }], flex: 1 }}>
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
@@ -520,18 +720,21 @@ function KpiCard({
             borderRadius: radius.card,
             paddingVertical: spacing.lg,
             paddingHorizontal: spacing.lg,
-            gap: 2,
+            gap: 8,
             backgroundColor: theme.glass,
             borderWidth: 1,
             borderColor: theme.glassBorder,
           },
           glow,
         ]}>
-        <IconBadge icon={icon} tint={tint} />
-        <AppText style={{ fontFamily: fontFamily.display, fontSize: 28, lineHeight: 32, color: theme.text, marginTop: 6 }}>{value}</AppText>
-        <AppText variant="caption" muted>
-          {label}
-        </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <IconBadge icon={icon} tint={tint} size={34} />
+          <AppText variant="caption" muted numberOfLines={1} style={{ flex: 1 }}>
+            {label}
+          </AppText>
+          <ChevronDownIcon color={theme.textMuted} size={14} />
+        </View>
+        <AppText style={{ fontFamily: fontFamily.display, fontSize: 28, lineHeight: 32, color: theme.text }}>{value}</AppText>
       </Pressable>
     </Animated.View>
   );

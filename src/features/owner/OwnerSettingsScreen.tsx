@@ -1,0 +1,301 @@
+import * as Linking from 'expo-linking';
+import { useState } from 'react';
+import { ActivityIndicator, Platform, TextInput, View } from 'react-native';
+
+import { AccountSection } from '@/components/AccountSection';
+import { AddressMapPreview } from '@/components/AddressMapPreview';
+import { AppText } from '@/components/AppText';
+import { Banner } from '@/components/Banner';
+import { Button } from '@/components/Button';
+import { Card, SectionLabel } from '@/components/Card';
+import { CheckIcon, SlidersIcon } from '@/components/icons';
+import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { SignOutButton } from '@/components/SignOutButton';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase/client';
+import { useI18n } from '@/lib/i18n';
+import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
+import { useAsync } from '@/lib/use-async';
+
+import { getOwnerHq, setOwnerHq } from './owner-api';
+
+function openExternalUrl(url: string): void {
+  if (Platform.OS === 'web') {
+    window.open(url, '_blank', 'noopener');
+    return;
+  }
+  void Linking.openURL(url);
+}
+
+function googleMapsUrl(lat: string, lng: string, addressQuery: string | null): string {
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  // `Number('')` is `0`, not `NaN` — without the blank-string check, unset Lat/Lng read as real
+  // coordinates 0,0 ("Null Island") instead of falling back to the typed address.
+  if (lat.trim() !== '' && lng.trim() !== '' && Number.isFinite(latNum) && Number.isFinite(lngNum)) return `https://www.google.com/maps/@${latNum},${lngNum},18z`;
+  if (addressQuery) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery)}`;
+  return 'https://www.google.com/maps';
+}
+
+/** "Posizione Palestra" here means the Owner's own HQ/office address (`gym_chains.hq_address`) —
+ * distinct from any single Manager's site address. Same reuse-not-reinvent map pattern as every
+ * other address field in the app (`AddressMapPreview`, the shared CLAUDE.md-approved Maps exception). */
+function HqLocationCard() {
+  const { t } = useI18n();
+  const theme = useTheme();
+  const hq = useAsync(() => getOwnerHq(), []);
+  const [editing, setEditing] = useState(false);
+  const [address, setAddress] = useState('');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+
+  // Seeded from the loaded data only when "Modifica" is actually tapped (a user action, not an
+  // effect) — avoids syncing local draft state to server state on every reload.
+  function startEditing(): void {
+    setAddress(hq.data?.address ?? '');
+    setLat(hq.data?.lat !== null && hq.data?.lat !== undefined ? String(hq.data.lat) : '');
+    setLng(hq.data?.lng !== null && hq.data?.lng !== undefined ? String(hq.data.lng) : '');
+    setEditing(true);
+  }
+
+  async function save(): Promise<void> {
+    setSaving(true);
+    setError(false);
+    try {
+      const latNum = Number(lat);
+      const lngNum = Number(lng);
+      const hasCoords = lat.trim().length > 0 && lng.trim().length > 0 && Number.isFinite(latNum) && Number.isFinite(lngNum);
+      await setOwnerHq(address, hasCoords ? latNum : undefined, hasCoords ? lngNum : undefined);
+      await hq.reload();
+      setEditing(false);
+    } catch (e) {
+      logger.error('owner.set_hq_failed', e);
+      setError(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle = {
+    minHeight: MIN_TAP,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    color: theme.text,
+    fontSize: 15,
+  } as const;
+
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <SectionLabel>{t('owner.settings.hq.title')}</SectionLabel>
+        {!editing ? <AppText onPress={startEditing} style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('owner.settings.hq.edit')}</AppText> : null}
+      </View>
+
+      {hq.loading && !hq.data ? <ActivityIndicator /> : null}
+
+      {!editing ? (
+        <AppText style={{ fontSize: 14 }}>{hq.data?.address || t('owner.settings.hq.empty')}</AppText>
+      ) : (
+        <View style={{ gap: spacing.sm }}>
+          <TextInput value={address} onChangeText={setAddress} placeholder={t('owner.settings.hq.addressPlaceholder')} placeholderTextColor={theme.textMuted} style={inputStyle} />
+          <AddressMapPreview addressQuery={address.trim() || null} lat={lat} lng={lng} height={140} />
+          <AppText accessibilityRole="link" onPress={() => openExternalUrl(googleMapsUrl(lat, lng, address.trim() || null))} style={{ color: theme.primary, fontWeight: '600', fontSize: 13 }}>
+            {t('manager.gym.location.openMaps')}
+          </AppText>
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <TextInput value={lat} onChangeText={setLat} placeholder={t('manager.gym.location.lat')} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" style={inputStyle} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <TextInput value={lng} onChangeText={setLng} placeholder={t('manager.gym.location.lng')} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" style={inputStyle} />
+            </View>
+          </View>
+          {error ? <Banner title={t('owner.settings.hq.error')} /> : null}
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Button label={t('common.close')} variant="secondary" onPress={() => setEditing(false)} />
+            <Button label={t('manager.gym.location.save')} onPress={() => void save()} disabled={saving} />
+          </View>
+        </View>
+      )}
+    </Card>
+  );
+}
+
+type TotpFactor = { id: string; status: string };
+
+/** Real TOTP two-factor authentication via Supabase Auth's own built-in MFA (`supabase.auth.mfa.*`)
+ * — no new backend, this is a native Supabase Auth feature. Deliberately scoped to the Owner role
+ * only for now (the pasted reference design's own "Sicurezza" card); no other role in this app has
+ * a 2FA UI yet. */
+function SecurityCard() {
+  const { t } = useI18n();
+  const theme = useTheme();
+  const factors = useAsync(async () => {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) throw error;
+    return (data?.totp ?? []).filter((f) => f.status === 'verified') as TotpFactor[];
+  }, []);
+  const [enrolling, setEnrolling] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [factorId, setFactorId] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const enrolledFactor = factors.data?.[0] ?? null;
+
+  async function startEnroll(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const { data, error: err } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+      if (err) throw err;
+      setFactorId(data.id);
+      setQrCode(data.totp.qr_code);
+      setSecret(data.totp.secret);
+      setEnrolling(true);
+    } catch (e) {
+      logger.error('owner.mfa_enroll_failed', e);
+      setError(t('owner.settings.security.error'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify(): Promise<void> {
+    if (!factorId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({ factorId });
+      if (challengeErr) throw challengeErr;
+      const { error: verifyErr } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code: code.trim() });
+      if (verifyErr) throw verifyErr;
+      setEnrolling(false);
+      setQrCode(null);
+      setSecret(null);
+      setFactorId(null);
+      setCode('');
+      factors.reload();
+    } catch (e) {
+      logger.error('owner.mfa_verify_failed', e);
+      setError(t('owner.settings.security.invalidCode'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disable(): Promise<void> {
+    if (!enrolledFactor) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: err } = await supabase.auth.mfa.unenroll({ factorId: enrolledFactor.id });
+      if (err) throw err;
+      factors.reload();
+    } catch (e) {
+      logger.error('owner.mfa_unenroll_failed', e);
+      // Supabase requires the aal2 level (i.e. having actually used 2FA this session) to remove an
+      // already-verified factor — the most likely real cause here, worth its own message.
+      setError(t('owner.settings.security.disableNeedsReauth'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inputStyle = {
+    minHeight: MIN_TAP,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    color: theme.text,
+    fontSize: 15,
+    textAlign: 'center' as const,
+    letterSpacing: 4,
+  };
+
+  return (
+    <Card>
+      <SectionLabel>{t('owner.settings.security.title')}</SectionLabel>
+
+      {enrolledFactor ? (
+        <View style={{ gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <CheckIcon color={theme.band.green.solid} size={16} />
+            <AppText style={{ color: theme.band.green.solid, fontWeight: '700', fontSize: 13 }}>{t('owner.settings.security.active')}</AppText>
+          </View>
+          {error ? <Banner title={error} /> : null}
+          <Button label={t('owner.settings.security.disable')} variant="dangerSoft" onPress={() => void disable()} disabled={busy} />
+        </View>
+      ) : enrolling ? (
+        <View style={{ gap: spacing.sm }}>
+          <AppText muted style={{ fontSize: 13 }}>
+            {t('owner.settings.security.scanHelp')}
+          </AppText>
+          {Platform.OS === 'web' && qrCode ? (
+            // Plain web <img>, same web-only raw-HTML convention already used for the Maps <iframe>
+            // in ManagerPositionCard.tsx/OwnerManagersScreen.tsx — this screen never runs natively.
+            <img src={`data:image/svg+xml;utf8,${encodeURIComponent(qrCode)}`} alt={t('owner.settings.security.qrAlt')} width={180} height={180} style={{ alignSelf: 'center' }} />
+          ) : null}
+          {secret ? (
+            <AppText style={{ fontFamily: 'monospace', fontSize: 13, textAlign: 'center' }} selectable>
+              {secret}
+            </AppText>
+          ) : null}
+          <TextInput value={code} onChangeText={setCode} placeholder="000000" placeholderTextColor={theme.textMuted} keyboardType="number-pad" maxLength={6} style={inputStyle} />
+          {error ? <Banner title={error} /> : null}
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Button label={t('common.close')} variant="secondary" onPress={() => setEnrolling(false)} />
+            <Button label={t('owner.settings.security.verify')} onPress={() => void verify()} disabled={busy || code.trim().length !== 6} />
+          </View>
+        </View>
+      ) : (
+        <View style={{ gap: spacing.sm }}>
+          <AppText muted style={{ fontSize: 13 }}>
+            {t('owner.settings.security.help')}
+          </AppText>
+          {error ? <Banner title={error} /> : null}
+          <Button label={t('owner.settings.security.enable')} onPress={() => void startEnroll()} disabled={busy} />
+        </View>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * First pass, deliberately smaller than the pasted reference design in one place: "Notifiche"
+ * (email notifications) is skipped — this project has no real email-sending backend (only Supabase
+ * Auth's own account-confirmation emails), so a toggle for it would control nothing real. Posizione
+ * sede and Sicurezza (real TOTP via Supabase Auth) below ARE wired to something real.
+ */
+export function OwnerSettingsScreen() {
+  const { t } = useI18n();
+
+  return (
+    <Screen>
+      <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+        <ScreenHeader icon={SlidersIcon} label={t('settings.title')} />
+        <SignOutButton />
+      </View>
+
+      <AccountSection />
+
+      <HqLocationCard />
+
+      <SecurityCard />
+
+      <Card>
+        <AppText muted style={{ fontSize: 12.5, lineHeight: 18 }}>
+          {t('owner.settings.moreComingSoon')}
+        </AppText>
+      </Card>
+    </Screen>
+  );
+}

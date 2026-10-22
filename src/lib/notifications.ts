@@ -207,6 +207,7 @@ export async function scheduleCheckinReminders(lang: Lang, siteName: string): Pr
         title: translate(lang, 'checkin.notification.stillHere.title'),
         body: translate(lang, 'checkin.notification.stillHere.body', { name: siteName }),
         categoryIdentifier: STILL_HERE_CATEGORY,
+        data: { url: '/(client)/checkin' },
       },
       trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: STILL_HERE_AFTER_MS / 1000, channelId },
     });
@@ -233,6 +234,106 @@ export async function cancelCheckinReminders(ids: CheckinNotificationIds): Promi
     if (ids.autoCheckout) await N.cancelScheduledNotificationAsync(ids.autoCheckout);
   } catch (e) {
     logger.error('notifications.checkin_cancel_failed', e);
+  }
+}
+
+/** How long to keep nagging after the 90-minute mark before giving up — never longer, since there is
+ * no auto check-out behind it (a real Client's gym session; see `use-real-checkin.ts`). Capped well
+ * under iOS's ~64 pending-local-notification limit together with anything else the app schedules. */
+const REPEAT_INTERVAL_MS = 10 * 60_000;
+const REPEAT_WINDOW_MS = 2 * 60 * 60_000;
+
+/**
+ * Real Client only: a bounded series of "sei ancora qui?" reminders, one at the 90-minute mark and
+ * then every 10 minutes after that for up to 2 more hours — never a single one-off, and never
+ * followed by an automatic check-out (there is none; see CLAUDE.md and `use-real-checkin.ts`).
+ * Scheduled as a flat list instead of one repeating trigger because Expo's `TIME_INTERVAL` repeat
+ * starts firing immediately at its own interval, not at a delayed 90-minute mark — scheduling each
+ * occurrence up front is the only way to get "nothing for 90 minutes, then every 10" out of local
+ * notifications alone (no background work is ever assumed; see constraint 1).
+ */
+export async function scheduleRepeatingStillHereReminders(lang: Lang, siteName: string): Promise<string[]> {
+  const N = await load();
+  if (!N) return [];
+  try {
+    if (!(await N.getPermissionsAsync()).granted) return [];
+    if (Platform.OS === 'android') {
+      await N.setNotificationChannelAsync(CHECKIN_CHANNEL_ID, { name: 'Check-in', importance: N.AndroidImportance.DEFAULT });
+    }
+    await ensureCheckinCategories(N, lang);
+    const channelId = Platform.OS === 'android' ? CHECKIN_CHANNEL_ID : undefined;
+    const ids: string[] = [];
+    for (let elapsedMs = STILL_HERE_AFTER_MS; elapsedMs <= STILL_HERE_AFTER_MS + REPEAT_WINDOW_MS; elapsedMs += REPEAT_INTERVAL_MS) {
+      const id = await N.scheduleNotificationAsync({
+        content: {
+          title: translate(lang, 'checkin.notification.stillHere.title'),
+          body: translate(lang, 'checkin.notification.stillHere.body', { name: siteName }),
+          categoryIdentifier: STILL_HERE_CATEGORY,
+          data: { url: '/(client)/checkin' },
+        },
+        trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: elapsedMs / 1000, channelId },
+      });
+      ids.push(id);
+    }
+    return ids;
+  } catch (e) {
+    logger.error('notifications.repeating_checkin_schedule_failed', e);
+    return [];
+  }
+}
+
+/** Cancels every pending reminder from `scheduleRepeatingStillHereReminders`: on manual check-out, or
+ * a "sì, ancora qui" confirmation (which reschedules a fresh series). */
+export async function cancelRepeatingReminders(ids: readonly string[]): Promise<void> {
+  const N = await load();
+  if (!N) return;
+  try {
+    for (const id of ids) await N.cancelScheduledNotificationAsync(id);
+  } catch (e) {
+    logger.error('notifications.repeating_checkin_cancel_failed', e);
+  }
+}
+
+const PAYMENT_WARNING_ID = 'gymly-payment-warning';
+
+/**
+ * A single local notification ~24h before `graceEndDate` (the subscription row's own, already-known
+ * deadline) — same "relative seconds from a known future timestamp" technique as
+ * `scheduleCheckinReminders`, never a server push (this project has none, see CLAUDE.md). Re-scheduled
+ * on every foreground-return poll of `client_get_my_subscription()` while status stays 'grace';
+ * explicitly cancels any previous one first (a fixed `identifier` alone isn't trusted to dedupe) so a
+ * re-poll never stacks duplicates. A no-op once the deadline has already passed (e.g. the app was
+ * opened again after the 24h mark, or the warning window is in the past) — the in-app "Devi pagare"
+ * banner, not this notification, is this app's authoritative source once it's open.
+ */
+export async function schedulePaymentWarning(graceEndDate: string, lang: Lang): Promise<void> {
+  const N = await load();
+  if (!N) return;
+  try {
+    await N.cancelScheduledNotificationAsync(PAYMENT_WARNING_ID).catch(() => undefined);
+    if (!(await N.getPermissionsAsync()).granted) return;
+    const graceEndMs = new Date(`${graceEndDate}T00:00:00`).getTime();
+    const secondsFromNow = (graceEndMs - 24 * 60 * 60_000 - Date.now()) / 1000;
+    if (secondsFromNow <= 0) return;
+    await N.scheduleNotificationAsync({
+      identifier: PAYMENT_WARNING_ID,
+      content: { title: translate(lang, 'billing.notification.title'), body: translate(lang, 'billing.notification.body') },
+      trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsFromNow },
+    });
+  } catch (e) {
+    logger.error('notifications.payment_warning_schedule_failed', e);
+  }
+}
+
+/** Cancels the payment warning: once the Client pays (reactivating the subscription) or the app
+ * notices status is no longer 'grace'. */
+export async function cancelPaymentWarning(): Promise<void> {
+  const N = await load();
+  if (!N) return;
+  try {
+    await N.cancelScheduledNotificationAsync(PAYMENT_WARNING_ID);
+  } catch (e) {
+    logger.error('notifications.payment_warning_cancel_failed', e);
   }
 }
 

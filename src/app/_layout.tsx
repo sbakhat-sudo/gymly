@@ -12,17 +12,40 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { DemoBanner } from '@/components/DemoBanner';
+import { getMySubscription } from '@/features/billing/billing-api';
+import { PlanChoiceModal } from '@/features/billing/PlanChoiceModal';
 import { syncGeofences } from '@/hooks/useSyncGeofences';
 import { DEFAULT_BOOT_STATE, loadBootState, useAppState, type BootState } from '@/lib/app-state';
 import { AppProviders } from '@/lib/app-providers';
 import { useAuth } from '@/lib/auth/auth-context';
+import { useI18n } from '@/lib/i18n';
 import { logger } from '@/lib/logger';
+import { cancelPaymentWarning, schedulePaymentWarning } from '@/lib/notifications';
 import { PermissionsProvider, usePermissionsState } from '@/lib/permissions-context';
 import { createServices } from '@/lib/services';
 import { useTheme } from '@/lib/theme';
+import { useAsync } from '@/lib/use-async';
 
 // Keep the native splash up until preferences (and the Aurora type faces) are read: the first frame is already the right one.
 void SplashScreen.preventAutoHideAsync();
+
+// RN Web renders every `TextInput` as a real DOM `<input>`/`<textarea>`, so a focused one inherits
+// the browser's own default focus outline — a square-cornered ring that ignores whatever
+// `borderRadius` the element was actually given, breaking every pill-shaped search bar the moment
+// it's focused. Dropped entirely (not replaced with a themed ring — tried that, also unwanted): the
+// field's own border/background already shows which one is focused. Injected here (not
+// `app/+html.tsx`) because that file only runs for a static web export, never for the `npx expo
+// start` dev server this is actually tested against.
+if (Platform.OS === 'web') {
+  const style = document.createElement('style');
+  style.textContent = `
+    input:focus, textarea:focus {
+      outline: none;
+      box-shadow: none;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 export default function RootLayout() {
   const [boot, setBoot] = useState<BootState | null>(null);
@@ -106,12 +129,14 @@ function NavigatorStack({
 }) {
   const theme = useTheme();
   const router = useRouter();
+  const { lang } = useI18n();
   const { guest, demo } = useAppState();
   const { allGranted, recheck } = usePermissionsState();
-  // Manager/Coach/Admin are all staff dashboards meant for a browser, never the phone app.
+  // Manager/Coach/Admin/Owner are all staff dashboards meant for a browser, never the phone app.
   const staffOnNative =
     (auth.status === 'active' && isNative && (auth.profile.role === 'coach' || auth.profile.role === 'manager')) ||
     (auth.status === 'admin' && isNative) ||
+    (auth.status === 'owner' && isNative) ||
     // An Admin-approved Manager with no gym yet (noProfile, role already known) would otherwise
     // reach CreateGymScreen via complete-profile.tsx on a phone — and a still-pending Manager
     // would reach the same (auth) group. Coach's own pending state is intentionally left alone.
@@ -123,6 +148,21 @@ function NavigatorStack({
   // deliberate exception: a marketing preview of the Client app, allowed on web too.
   const clientEligible = (auth.status === 'active' && auth.profile.role === 'client' && !needsPermissionsScreen) || (auth.status !== 'active' && guest);
   const realClientNative = auth.status === 'active' && isNative && auth.profile.role === 'client';
+
+  // Billing: whether this real Client must see the mandatory plan-choice popup, and whether a local
+  // "ti bloccheremo tra poco" warning needs (re)scheduling — both driven by one poll of the same RPC,
+  // re-run on foreground-return below (the server's own cron job is what actually moves the status
+  // along; this just notices the result next time the Client's device checks in).
+  const subscription = useAsync(() => getMySubscription(), [], realClientNative);
+  useEffect(() => {
+    if (!realClientNative) return;
+    const sub = subscription.data?.subscription;
+    if (sub && sub.status === 'grace' && sub.graceEndDate) {
+      void schedulePaymentWarning(sub.graceEndDate, lang);
+    } else {
+      void cancelPaymentWarning();
+    }
+  }, [realClientNative, subscription.data, lang]);
 
   const navigationTheme = useMemo(() => {
     const base = theme.isDark ? DarkTheme : DefaultTheme;
@@ -152,10 +192,16 @@ function NavigatorStack({
       if (wasBackground && isNowForeground) {
         recheck();
         void syncGeofences();
+        subscription.reload();
       }
       previous = next;
     });
     return () => sub.remove();
+    // `subscription` itself (the whole useAsync result) changes identity every render, so listing it
+    // here would re-subscribe the listener constantly; `subscription.reload` only ever does a stable
+    // `setRequest(r => r + 1)` regardless of which render's closure called it, so a "stale" reference
+    // is harmless to call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNative, recheck]);
 
   // Also sync at login/startup itself, not just on the foreground-return path above: a cold start
@@ -201,6 +247,7 @@ function NavigatorStack({
     <ThemeProvider value={navigationTheme}>
       {/* Reflects the resolved theme (Settings → Aspetto), not just the OS scheme: 'auto' still tracks it live via useTheme(). */}
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+      {realClientNative ? <PlanChoiceModal visible={subscription.data?.needsPlanChoice === true} onDone={() => subscription.reload()} /> : null}
       <Stack screenOptions={{ headerShown: false }}>
         {/* A guest (Benvenuto → "Guarda l'affluenza senza account") gets the member app without
             signing in; `demo` ("Prova la demo") additionally allows it on web. */}
@@ -216,6 +263,9 @@ function NavigatorStack({
         <Stack.Protected guard={auth.status === 'admin' && !isNative}>
           <Stack.Screen name="(admin)" />
         </Stack.Protected>
+        <Stack.Protected guard={auth.status === 'owner' && !isNative}>
+          <Stack.Screen name="(owner)" />
+        </Stack.Protected>
         <Stack.Protected guard={staffOnNative}>
           <Stack.Screen name="web-only" />
         </Stack.Protected>
@@ -230,17 +280,17 @@ function NavigatorStack({
             Manager would have BOTH this group and web-only simultaneously "allowed" (status is
             neither 'active' nor 'admin', so this guard alone stays true for them too), leaving
             which one actually renders up to Expo Router's own tie-breaking instead of this code. */}
-        <Stack.Protected guard={auth.status !== 'active' && auth.status !== 'admin' && !guest && !staffOnNative}>
+        <Stack.Protected guard={auth.status !== 'active' && auth.status !== 'admin' && auth.status !== 'owner' && !guest && !staffOnNative}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
         {/* Secondary Admin screens, reached by pushing from the Admin's own Impostazioni hub — kept
             outside the (admin) tab group the same way redemption/[id] sits outside (client)'s. */}
         <Stack.Protected guard={auth.status === 'admin' && !isNative}>
-          <Stack.Screen name="parametri" />
           <Stack.Screen name="comunicazioni" />
           <Stack.Screen name="pagamento" />
         </Stack.Protected>
         <Stack.Screen name="redemption/[id]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="feedback/[checkinId]" options={{ presentation: 'modal' }} />
       </Stack>
       {demo ? <DemoBanner /> : null}
     </ThemeProvider>

@@ -13,7 +13,6 @@ import { AppText } from './AppText';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { Card, SectionTitle } from './Card';
-import { ConfirmDialog } from './ConfirmDialog';
 
 /**
  * Account block shared by every role's Impostazioni screen: email (read-only), change password,
@@ -30,13 +29,34 @@ export function AccountSection() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<'success' | 'error' | 'tooShort' | 'sameAsOld' | null>(null);
-  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoNotice, setPhotoNotice] = useState<'permission' | 'permissionBlocked' | 'error' | null>(null);
 
   const email = auth.status !== 'loading' && auth.status !== 'signedOut' ? auth.session.user.email : undefined;
   const userId = auth.status !== 'loading' && auth.status !== 'signedOut' ? auth.session.user.id : null;
-  const profile = auth.status === 'active' || auth.status === 'admin' ? auth.profile : null;
+  const profile = auth.status === 'active' || auth.status === 'admin' || auth.status === 'owner' ? auth.profile : null;
+  // Lazy initial state (not an effect): this component mounts once per Impostazioni visit, by which
+  // point `profile` is already resolved — no need to sync it on every re-render.
+  const [name, setName] = useState(() => profile?.fullName ?? '');
+  const [savingName, setSavingName] = useState(false);
+  const [nameFeedback, setNameFeedback] = useState<'success' | 'error' | null>(null);
+
+  async function saveName(): Promise<void> {
+    if (!userId) return;
+    setSavingName(true);
+    setNameFeedback(null);
+    // `full_name` is self-updatable by any authenticated role (grant update (full_name) ... to
+    // authenticated, RLS row check id = auth.uid()) — already in place since the very first
+    // migration, no new backend needed for this.
+    const { error } = await supabase.from('profiles').update({ full_name: name.trim() || null }).eq('id', userId);
+    setSavingName(false);
+    if (error) {
+      setNameFeedback('error');
+      return;
+    }
+    await auth.refreshProfile();
+    setNameFeedback('success');
+  }
 
   async function changePhoto(): Promise<void> {
     if (!userId) return;
@@ -121,6 +141,41 @@ export function AccountSection() {
           </View>
         ) : null}
 
+        <AppText variant="caption" style={{ fontWeight: '600' }}>
+          {t('account.name.title')}
+        </AppText>
+        <TextInput
+          value={name}
+          onChangeText={(v) => {
+            setName(v);
+            setNameFeedback(null);
+          }}
+          placeholder={t('account.name.placeholder')}
+          placeholderTextColor={theme.textMuted}
+          accessibilityLabel={t('account.name.title')}
+          returnKeyType="done"
+          onSubmitEditing={() => void saveName()}
+          style={{
+            minHeight: MIN_TAP + 4,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+            borderRadius: 16,
+            paddingHorizontal: spacing.lg,
+            color: theme.text,
+            backgroundColor: theme.background,
+            fontFamily: fontFamily.body,
+            fontSize: 16,
+          }}
+        />
+        {nameFeedback ? (
+          <View accessibilityLiveRegion="polite">
+            <AppText color={nameFeedback === 'success' ? theme.text : theme.danger} style={{ fontWeight: '600' }}>
+              {t(nameFeedback === 'success' ? 'account.name.success' : 'account.name.error')}
+            </AppText>
+          </View>
+        ) : null}
+        <Button label={t('account.name.save')} variant="secondary" onPress={() => void saveName()} disabled={savingName || name.trim() === (profile?.fullName ?? '')} />
+
         {email ? <AppText muted>{email}</AppText> : null}
 
         <AppText variant="caption" style={{ fontWeight: '600' }}>
@@ -175,23 +230,8 @@ export function AccountSection() {
           disabled={busy || password.trim().length === 0}
         />
 
-        {isSidebar ? null : <Button label={t('account.signOut')} variant="dangerSoft" onPress={() => setConfirmingSignOut(true)} style={{ marginTop: spacing.sm }} />}
+        {isSidebar ? null : <Button label={t('account.signOut')} variant="dangerSoft" onPress={() => void auth.signOut()} style={{ marginTop: spacing.sm }} />}
       </Card>
-
-      {isSidebar ? null : (
-        <ConfirmDialog
-          visible={confirmingSignOut}
-          title={t('account.signOut.confirm.title')}
-          message=""
-          confirmLabel={t('account.signOut.confirm.action')}
-          destructive
-          onConfirm={() => {
-            setConfirmingSignOut(false);
-            void auth.signOut();
-          }}
-          onCancel={() => setConfirmingSignOut(false)}
-        />
-      )}
     </>
   );
 }

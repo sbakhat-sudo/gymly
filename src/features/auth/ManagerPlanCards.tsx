@@ -44,7 +44,7 @@ export function planAccent(plan: ManagerPlan, theme: Palette): string {
  * whichever plan the pointer is currently over (or has picked), so it always reads as part of the
  * same choice rather than a fixed, unrelated label; idle (nothing hovered/picked) it's a neutral
  * brand tint. Shared by the signup plan picker and the "Hai una palestra?" section on Welcome. */
-export function ManagerBadge({ activePlan }: { activePlan: ManagerPlan | null }) {
+export function ManagerBadge({ activePlan, label }: { activePlan: ManagerPlan | null; label?: TranslationKey }) {
   const { t } = useI18n();
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
@@ -67,7 +67,7 @@ export function ManagerBadge({ activePlan }: { activePlan: ManagerPlan | null })
   return (
     <Animated.View style={{ alignSelf: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill, backgroundColor, transform: [{ scale }] }}>
       <Animated.Text style={{ color: textColor, fontFamily: fontFamily.bodyBold, fontWeight: '800', fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase' }}>
-        {t('managerSignup.badge')}
+        {t(label ?? 'managerSignup.badge')}
       </Animated.Text>
     </Animated.View>
   );

@@ -4,19 +4,24 @@ import { ActivityIndicator, Platform, Pressable, TextInput, View } from 'react-n
 
 import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
+import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EyeIcon, UsersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useAuth } from '@/lib/auth/auth-context';
 import { formatShortDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { logger } from '@/lib/logger';
 import { useAsync } from '@/lib/use-async';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 
+import { ManagerNotifications } from './ManagerNotifications';
 import { createMember, deletePerson, getRoster, setPersonStatus, type NewMember, type RosterEntry } from './manager-api';
+import { roleColor } from './role-colors';
 
 export function PeopleScreen() {
   const { t, lang } = useI18n();
@@ -87,9 +92,7 @@ export function PeopleScreen() {
   return (
     <Screen onRefresh={roster.reload} refreshing={roster.loading && roster.data !== undefined}>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <AppText variant="display" style={{ fontSize: 32 }}>
-          {t('manager.people.title')}
-        </AppText>
+        <ScreenHeader icon={UsersIcon} label={t('manager.people.title')} notifications={<ManagerNotifications />} />
         {roster.data && roster.data.length > 0 ? <Button label={t('manager.people.export')} variant="secondary" onPress={exportCsv} /> : null}
       </View>
 
@@ -217,14 +220,6 @@ function RosterPanel({
   );
 }
 
-// Fixed per-role fills (not theme primary/accent): the Manager asked for these two specific colours
-// so the row itself reads as "this person's role" at a glance, same idea as a coloured tag but
-// filling the whole line instead of a small badge — purple for Coach, the brand's own orange-red
-// for Client (already AA-tested against white as `onAccent`, so Client reuses it instead of a new
-// ad-hoc colour).
-const COACH_COLOR = '#7C4DFF';
-const COACH_ON_COLOR = '#FFFFFF';
-
 /** One roster row, filled edge-to-edge with the role's colour, laid out in the same columns as the
  * panel's header above it (name, phone, activated, deactivated) — and an eye button that opens the
  * actions sheet (activate/deactivate, delete), a Manager's one entry point to manage someone
@@ -232,9 +227,7 @@ const COACH_ON_COLOR = '#FFFFFF';
 function PersonRow({ person, last, onOpenSheet }: { person: RosterEntry; last: boolean; onOpenSheet: (person: RosterEntry) => void }) {
   const { t, lang } = useI18n();
   const theme = useTheme();
-  const isCoach = person.role === 'coach';
-  const rowBg = isCoach ? COACH_COLOR : theme.accent;
-  const onRowColor = isCoach ? COACH_ON_COLOR : theme.onAccent;
+  const { bg: rowBg, on: onRowColor } = roleColor(person.role, theme);
   const isActive = person.status === 'active';
 
   return (
@@ -250,6 +243,7 @@ function PersonRow({ person, last, onOpenSheet }: { person: RosterEntry; last: b
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: theme.background,
       }}>
+      <Avatar uri={person.avatarUrl} name={person.fullName} size={32} tint="rgba(255,255,255,0.3)" onTint={onRowColor} />
       <AppText numberOfLines={1} color={onRowColor} style={{ flex: 2, fontWeight: '700' }}>
         {person.fullName ?? t('common.unnamedPerson')}
       </AppText>
@@ -286,11 +280,10 @@ function sanitizePhone(raw: string): string {
 }
 
 /**
- * `Linking.openURL` on web navigates the current tab away to wa.me, replacing the whole app (and,
- * since the URL used to carry `?text=...Password: XXXX`, left the password sitting in that tab's
- * browser history). This screen only ever renders on web (Manager is a web-only role), so
- * `window.open` is always available here — opens WhatsApp in a new tab/app instead, same as any
- * ordinary link, and leaves Gymly's own tab untouched. Native (Coach/Client apps) keeps `Linking`.
+ * `Linking.openURL` on web navigates the current tab away to wa.me, replacing the whole app. This
+ * screen only ever renders on web (Manager is a web-only role), so `window.open` is always available
+ * here — opens WhatsApp in a new tab/app instead, same as any ordinary link, and leaves Gymly's own
+ * tab untouched. Native (Coach/Client apps) keeps `Linking`.
  */
 function openExternalUrl(url: string): void {
   if (Platform.OS === 'web') {
@@ -302,11 +295,10 @@ function openExternalUrl(url: string): void {
 
 /**
  * Toggle button that expands into name/email/phone fields: creates the account right away (the
- * Manager never sees or picks the password — it's generated here) and opens WhatsApp with it ready
- * to send. The password itself is never put in the WhatsApp message/URL (see `openExternalUrl`'s
- * comment on why that used to leak into browser history) — it's shown here instead, with a "Copia"
- * button, so the Manager relays it through a separate channel of their choosing.
- */
+ * Manager never sees or picks the password — it's generated here), then opens WhatsApp straight to
+ * the new member's own number with name/email/password/link all ready to send, one message, nothing
+ * shown a second time elsewhere in Gymly — confirmed, final: the password belongs in that one
+ * message, not duplicated into a separate "Copia" box here too. */
 function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreated: () => void }) {
   const { t } = useI18n();
   const theme = useTheme();
@@ -316,8 +308,8 @@ function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreat
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const [emailTaken, setEmailTaken] = useState(false);
   const [created, setCreated] = useState<NewMember | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const inputStyle = {
     minHeight: MIN_TAP,
@@ -338,28 +330,30 @@ function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreat
     }
     setBusy(true);
     setError(false);
+    setEmailTaken(false);
     try {
       const member: NewMember = await createMember(role, name, email, phone);
-      const appLink = Linking.createURL('/');
-      const message = t('manager.people.invite.message', { name: name.trim() || t('common.unnamedPerson'), email: member.email, link: appLink });
+      const link = Linking.createURL('/');
+      const message = t('manager.people.invite.message', { name: name.trim() || t('common.unnamedPerson'), email: member.email, password: member.password, link });
       openExternalUrl(`https://wa.me/${sanitizePhone(phone)}?text=${encodeURIComponent(message)}`);
       setCreated(member);
       onCreated();
-    } catch {
+    } catch (e) {
+      // The generic banner used to swallow every cause the same way — including the single most
+      // common one in practice (re-using an email that's already registered), which just needs a
+      // clear "use a different email" instead of a dead-end "something went wrong". The raw detail
+      // (duck-typed: Supabase's PostgrestError/AuthError don't reliably pass `instanceof Error`)
+      // still goes to the dev-only logger for anything less common.
+      const code = e && typeof e === 'object' && 'code' in e ? e.code : null;
+      const message = e && typeof e === 'object' && 'message' in e && typeof e.message === 'string' ? e.message : '';
+      logger.error('manager.create_member_failed', e);
+      // `code` is Supabase Auth's own stable identifier for this case (live-verified:
+      // `AuthApiError` with `code: 'user_already_exists'`, message "User already registered") — the
+      // message regex is only a fallback for whatever doesn't carry that code.
+      setEmailTaken(code === 'user_already_exists' || /already registered|already exists/i.test(message));
       setError(true);
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function copyPassword(): Promise<void> {
-    if (!created) return;
-    try {
-      await navigator.clipboard.writeText(created.password);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Best-effort — the password is also shown as selectable text right next to the button.
     }
   }
 
@@ -369,8 +363,8 @@ function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreat
     setEmail('');
     setPhone('');
     setError(false);
+    setEmailTaken(false);
     setCreated(null);
-    setCopied(false);
   }
 
   const canSubmit = name.trim().length > 0 && email.trim().length > 0 && sanitizePhone(phone).length > 0;
@@ -385,23 +379,7 @@ function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreat
           </AppText>
 
           {created ? (
-            <View style={{ gap: spacing.sm }}>
-              <AppText style={{ color: theme.primary, fontWeight: '600' }}>{t('manager.people.invite.sent')}</AppText>
-              <View style={{ gap: 4 }}>
-                <AppText variant="caption" style={{ fontWeight: '600' }}>
-                  {t('manager.people.invite.passwordLabel')}
-                </AppText>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                  <AppText selectable style={{ fontWeight: '700', fontSize: 16, flex: 1 }}>
-                    {created.password}
-                  </AppText>
-                  <Button label={t(copied ? 'manager.people.invite.copied' : 'manager.people.invite.copy')} variant="secondary" onPress={() => void copyPassword()} />
-                </View>
-                <AppText variant="caption" muted>
-                  {t('manager.people.invite.passwordHelp')}
-                </AppText>
-              </View>
-            </View>
+            <AppText style={{ color: theme.primary, fontWeight: '600' }}>{t('manager.people.invite.sent')}</AppText>
           ) : (
             <>
               <View style={{ gap: 4 }}>
@@ -458,7 +436,13 @@ function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreat
                   </AppText>
                 ) : null}
               </View>
-              {error ? <Banner title={t(emailLooksValid ? 'manager.people.invite.error' : 'manager.people.invite.emailInvalid')} /> : null}
+              {error ? (
+                <Banner
+                  title={t(
+                    !emailLooksValid ? 'manager.people.invite.emailInvalid' : emailTaken ? 'manager.people.invite.emailTaken' : 'manager.people.invite.error'
+                  )}
+                />
+              ) : null}
               <Button label={t('manager.people.invite.send')} onPress={() => void submit()} disabled={busy || !canSubmit} />
             </>
           )}

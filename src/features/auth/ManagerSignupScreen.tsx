@@ -88,15 +88,29 @@ export function ManagerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan
   return (
     <Screen>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.lg }}>
-        {router.canGoBack() ? (
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            style={{ width: MIN_TAP, height: MIN_TAP, borderRadius: MIN_TAP / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
-            <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
+        {/* Always rendered — reached with no navigation history at all (a fresh deep link, or Expo
+            Go reopening straight to this route) otherwise left no way back except closing the app.
+            Labelled (not just an icon) and high-contrast on purpose, after an icon-only circle proved
+            too easy to miss in testing. */}
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          style={{
+            flexDirection: 'row',
+            alignSelf: 'flex-start',
+            alignItems: 'center',
+            gap: 6,
+            minHeight: MIN_TAP,
+            paddingHorizontal: spacing.md,
+            borderRadius: MIN_TAP / 2,
+            backgroundColor: theme.surfaceAlt,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+          }}>
+          <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
+          <AppText style={{ fontWeight: '700', fontSize: 15 }}>{t('common.back')}</AppText>
+        </Pressable>
 
         <AppText variant="display" style={{ fontSize: 40 }}>
           {t('managerSignup.title')}
@@ -256,15 +270,25 @@ function PlanPickerModal({ visible, onPick }: { visible: boolean; onPick: (plan:
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         <View style={{ flex: 1, paddingTop: spacing.xxl, paddingHorizontal: spacing.lg, gap: spacing.xl }}>
-          {router.canGoBack() ? (
-            <Pressable
-              onPress={() => router.back()}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.back')}
-              style={{ width: MIN_TAP, height: MIN_TAP, borderRadius: MIN_TAP / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt }}>
-              <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+            style={{
+              flexDirection: 'row',
+              alignSelf: 'flex-start',
+              alignItems: 'center',
+              gap: 6,
+              minHeight: MIN_TAP,
+              paddingHorizontal: spacing.md,
+              borderRadius: MIN_TAP / 2,
+              backgroundColor: theme.surfaceAlt,
+              borderWidth: 1.5,
+              borderColor: theme.border,
+            }}>
+            <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
+            <AppText style={{ fontWeight: '700', fontSize: 15 }}>{t('common.back')}</AppText>
+          </Pressable>
 
           <View style={{ gap: 10 }}>
             <ManagerBadge activePlan={selected ?? hoveredPlan} />

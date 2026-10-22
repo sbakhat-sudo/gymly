@@ -228,8 +228,8 @@ export function WelcomeScreen() {
  * preview above. The cards are a dedicated "showcase" style (dark, gridded, glowing corner, one
  * big bold stat) rather than the functional picker reused in the signup flow — a landing page
  * sells the plan, it doesn't need the picker's select/dim mechanics. Picking one carries it
- * straight into signup (`?role=manager&plan=`), skipping that screen's own plan picker since the
- * choice is already made. */
+ * straight into signup (`?role=owner&plan=`), skipping that screen's own plan picker since the
+ * choice is already made. Targets the Owner flow, not Manager — Manager no longer self-registers. */
 function ManagerPlansSection({ isWide }: { isWide: boolean }) {
   const { t } = useI18n();
   const theme = useTheme();
@@ -241,7 +241,7 @@ function ManagerPlansSection({ isWide }: { isWide: boolean }) {
       <View {...decorativeA11yProps} style={{ height: 1, backgroundColor: theme.border }} />
 
       <View style={{ gap: 10 }}>
-        <ManagerBadge activePlan={hoveredPlan} />
+        <ManagerBadge activePlan={hoveredPlan} label="ownerSignup.badge" />
         <AppText variant="headline" style={isWide ? { fontSize: 32, lineHeight: 36, letterSpacing: 32 * -0.05 } : { fontSize: 26, lineHeight: 30, letterSpacing: 26 * -0.05 }}>
           {t('welcome.plans.title')}
         </AppText>
@@ -264,7 +264,7 @@ function ManagerPlansSection({ isWide }: { isWide: boolean }) {
                 plan={p}
                 onHoverIn={() => setHoveredPlan(p)}
                 onHoverOut={() => setHoveredPlan((h) => (h === p ? null : h))}
-                onPress={() => router.push(`/(auth)/signup?role=manager&plan=${p}`)}
+                onPress={() => router.push(`/(auth)/signup?role=owner&plan=${p}`)}
               />
             </FadeSlideIn>
           </View>

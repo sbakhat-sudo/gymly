@@ -4,6 +4,8 @@ import { View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { LogInIcon } from '@/components/icons';
+import { PageTitle } from '@/components/PageTitle';
 import { Screen } from '@/components/Screen';
 import { formatStopwatch } from '@/lib/domain/checkin';
 import { getSiteStatus } from '@/lib/gym-status';
@@ -51,9 +53,7 @@ export function RealClientCheckInScreen({ siteId }: { siteId: string }) {
   return (
     <Screen orb={{ color: checkedIn ? theme.band.red.solid : theme.accent, top: 82, size: 360 }}>
       <View style={{ gap: 6 }}>
-        <AppText variant="headline" accessibilityRole="header">
-          {t('checkin.title')}
-        </AppText>
+        <PageTitle icon={LogInIcon} label={t('checkin.title')} circleSize={28} fontSize={36} />
         <AppText muted style={{ fontSize: 14, lineHeight: 20 }}>
           {t('checkin.subtitle')}
         </AppText>
@@ -85,7 +85,7 @@ export function RealClientCheckInScreen({ siteId }: { siteId: string }) {
       <ConfirmDialog
         visible={checkin.phase === 'awaitingConfirmation'}
         title={t('checkin.stillHere.title')}
-        message={t('checkin.stillHere.body')}
+        message={t('checkin.stillHere.body.real')}
         confirmLabel={t('checkin.stillHere.yes')}
         cancelLabel={t('checkin.stillHere.no')}
         onConfirm={() => void checkin.confirmStillHere()}

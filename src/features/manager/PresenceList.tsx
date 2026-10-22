@@ -1,51 +1,39 @@
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/Card';
 import { LiveDot } from '@/components/LiveDot';
 import { TimerRing } from '@/components/TimerRing';
-import { elapsedSecondsSince, formatStopwatch } from '@/lib/domain/checkin';
+import { elapsedSecondsSince, formatClockMinutes } from '@/lib/domain/checkin';
 import { useAppActive, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { radius, spacing, useTheme } from '@/lib/theme';
 
-import { getPresentPeople, type PresentPerson } from './manager-api';
+import type { PresentPerson } from './manager-api';
 
-const POLL_MS = 20_000;
+/** Fixed, not `maxHeight`: a row's `Avatar` resolving its image after mount nudges the row's own
+ * height, and a `maxHeight` ScrollView re-measures against that shifting content — same
+ * async-image-resize timing bug already hit once on the Feedback screen's `CoachCard` (see its own
+ * note). A fixed height sidesteps it entirely, and keeps this card the same height as "Attività in
+ * corso" beside it either way. */
+const PRESENCE_LIST_HEIGHT = 460;
 
 /**
  * Page 1's "chi c'è ora" list: everyone with an open check-in at the gym right now, clients and
- * coaches together, newest first. Polls rather than subscribing (no realtime channel in this
- * project's allowed dependency set) — good enough for a manager glancing at the room.
+ * coaches together, newest first. `people` is fetched once by the parent screen
+ * (`ManagerSituationScreen`) and shared with its own "In palestra ora"/"Occupazione" stat cards,
+ * instead of this list polling a second, independent copy of the same data that could show a
+ * slightly different count for a moment.
  */
-export function PresenceList({ siteId }: { siteId: string }) {
+export function PresenceList({ siteId, people, error }: { siteId: string; people: readonly PresentPerson[] | null; error: boolean }) {
   const { t } = useI18n();
   const theme = useTheme();
   const appActive = useAppActive();
-  // Its own per-second clock for the stopwatch, independent of the list's 20s roster poll above and
-  // of the parent screen's 30s band clock: at 30s the digits visibly "stopped" for long stretches
-  // then jumped, which read as broken rather than live.
+  // Its own per-second clock for the stopwatch, independent of the roster poll and of the parent
+  // screen's 30s band clock: at 30s the digits visibly "stopped" for long stretches then jumped,
+  // which read as broken rather than live.
   const nowMs = useNow(1000, appActive);
-  const [people, setPeople] = useState<PresentPerson[] | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    const load = (): void => {
-      getPresentPeople(siteId).then(
-        (p) => alive && setPeople(p),
-        () => alive && setError(true)
-      );
-    };
-    load();
-    const timer = setInterval(load, POLL_MS);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [siteId]);
 
   if (error) return null;
   if (!people) return null;
@@ -67,7 +55,7 @@ export function PresenceList({ siteId }: { siteId: string }) {
           {t('manager.presence.empty')}
         </AppText>
       ) : (
-        <View style={{ gap: spacing.sm }}>
+        <ScrollView style={{ height: PRESENCE_LIST_HEIGHT }} contentContainerStyle={{ gap: spacing.sm }} showsVerticalScrollIndicator={false}>
           {people.map((p) => {
             const isCoach = p.kind === 'coach';
             const tint = isCoach ? theme.accent : theme.primary;
@@ -96,7 +84,7 @@ export function PresenceList({ siteId }: { siteId: string }) {
                   </AppText>
                 </View>
                 <TimerRing
-                  label={formatStopwatch(seconds)}
+                  label={formatClockMinutes(seconds)}
                   size={60}
                   colors={[theme.band.green.solid, theme.band.amber.solid, theme.band.red.solid]}
                   rotationDeg={(seconds % 60) * 6}
@@ -104,7 +92,7 @@ export function PresenceList({ siteId }: { siteId: string }) {
               </View>
             );
           })}
-        </View>
+        </ScrollView>
       )}
     </View>
   );

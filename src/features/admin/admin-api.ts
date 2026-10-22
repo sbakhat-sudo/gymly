@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { currentUserAgent } from '@/lib/user-agent';
 
 export type SiteApprovalStatus = 'pending_approval' | 'active' | 'suspended';
 
@@ -39,6 +40,7 @@ export interface AdminSite {
   managerName: string | null;
   managerStatus: 'pending' | 'active' | 'rejected' | null;
   plan: SitePlan;
+  chainName: string | null;
 }
 
 export { getSiteGeofence, type SiteGeofence } from '@/lib/gym-status';
@@ -46,18 +48,63 @@ export { getSiteGeofence, type SiteGeofence } from '@/lib/gym-status';
 /** Unlike the Manager's `setSiteLocation`, this works on ANY site — `admin_set_site_location`
  * checks `is_admin()` instead of gym ownership, see the migration. */
 export async function adminSetSiteLocation(siteId: string, lat: number, lng: number, radiusM: number): Promise<void> {
-  const { error } = await supabase.rpc('admin_set_site_location', { p_site_id: siteId, p_lat: lat, p_lng: lng, p_radius: radiusM });
+  const { error } = await supabase.rpc('admin_set_site_location', {
+    p_site_id: siteId,
+    p_lat: lat,
+    p_lng: lng,
+    p_radius: radiusM,
+    p_user_agent: currentUserAgent(),
+  });
   if (error) throw error;
 }
 
+export interface GpsAuditEntry {
+  id: number;
+  siteId: string;
+  siteName: string;
+  changedByName: string | null;
+  changedAt: string;
+  oldLat: number | null;
+  oldLng: number | null;
+  oldRadius: number | null;
+  newLat: number;
+  newLng: number;
+  newRadius: number;
+  userAgent: string | null;
+}
+
+/** Every GPS geofence change (Manager's own edit or Admin's, any site) — `gps_audit_log`, written
+ * atomically inside `manager_set_site_location`/`admin_set_site_location`. `siteId: null` = every site. */
+export async function getGpsAuditLog(siteId: string | null = null): Promise<GpsAuditEntry[]> {
+  const { data, error } = await supabase.rpc('admin_get_gps_audit_log', { p_site_id: siteId, p_limit: 500 });
+  if (error) throw error;
+  return data.map((r) => ({
+    id: r.id,
+    siteId: r.site_id,
+    siteName: r.site_name,
+    changedByName: r.changed_by_name,
+    changedAt: r.changed_at,
+    oldLat: r.old_lat,
+    oldLng: r.old_lng,
+    oldRadius: r.old_radius,
+    newLat: r.new_lat,
+    newLng: r.new_lng,
+    newRadius: r.new_radius,
+    userAgent: r.user_agent,
+  }));
+}
+
 export async function getSites(): Promise<AdminSite[]> {
-  const [{ data: sites, error: sitesError }, { data: managers, error: managersError }] = await Promise.all([
-    supabase.from('sites').select('site_id, name, address, approval_status, created_at, manager_id, plan').order('created_at', { ascending: false }),
+  const [{ data: sites, error: sitesError }, { data: managers, error: managersError }, { data: chains, error: chainsError }] = await Promise.all([
+    supabase.from('sites').select('site_id, name, address, approval_status, created_at, manager_id, plan, chain_id').order('created_at', { ascending: false }),
     supabase.from('profiles').select('id, full_name, status').eq('role', 'manager'),
+    supabase.from('gym_chains').select('id, name'),
   ]);
   if (sitesError) throw sitesError;
   if (managersError) throw managersError;
+  if (chainsError) throw chainsError;
   const managerById = new Map(managers.map((m) => [m.id, m]));
+  const chainById = new Map(chains.map((c) => [c.id, c.name]));
   return sites.map((s) => {
     const manager = managerById.get(s.manager_id);
     return {
@@ -70,6 +117,7 @@ export async function getSites(): Promise<AdminSite[]> {
       managerName: manager?.full_name ?? null,
       managerStatus: manager?.status ?? null,
       plan: s.plan,
+      chainName: s.chain_id ? (chainById.get(s.chain_id) ?? null) : null,
     };
   });
 }
@@ -114,12 +162,33 @@ export interface PendingManager {
 }
 
 /** New Manager signups: a plan was picked, no gym exists yet — waiting for this approval before
- * `create_manager_site` is even callable. */
+ * `create_manager_site` is even callable.
+ * @deprecated Manager no longer self-registers (product decision) — this stays only for whatever
+ * pending Manager rows already existed before that changed. New requests only ever come from
+ * `getPendingOwners()` now. */
 export async function getPendingManagers(): Promise<PendingManager[]> {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, full_name, requested_plan, created_at')
     .eq('role', 'manager')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data.map((m) => ({ userId: m.id, fullName: m.full_name, requestedPlan: m.requested_plan, createdAt: m.created_at }));
+}
+
+export async function setOwnerStatus(userId: string, status: 'active' | 'rejected'): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_profile_status', { p_user_id: userId, p_status: status });
+  if (error) throw error;
+}
+
+/** New Owner signups: a plan was picked, no business exists yet — waiting for this approval before
+ * `create_owner_chain` is even callable. Owner's equivalent of the old `getPendingManagers()`. */
+export async function getPendingOwners(): Promise<PendingManager[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, requested_plan, created_at')
+    .eq('role', 'owner')
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
   if (error) throw error;
@@ -137,27 +206,6 @@ export async function getSitesGrowth(months = 6): Promise<MonthCount[]> {
   const { data, error } = await supabase.rpc('admin_get_sites_growth', { p_months: months });
   if (error) throw error;
   return data.map((r) => ({ monthKey: r.month_key, count: r.count }));
-}
-
-// ── Parametri — one real, wired setting ────────────────────────────────────
-
-export interface PlatformSettings {
-  defaultCapacityReference: number;
-  supportEmail: string | null;
-}
-
-export async function getSettings(): Promise<PlatformSettings> {
-  const { data, error } = await supabase.from('platform_settings').select('default_capacity_reference, support_email').eq('id', true).single();
-  if (error) throw error;
-  return { defaultCapacityReference: data.default_capacity_reference, supportEmail: data.support_email };
-}
-
-export async function updateSettings(settings: PlatformSettings): Promise<void> {
-  const { error } = await supabase.rpc('admin_update_settings', {
-    p_default_capacity_reference: settings.defaultCapacityReference,
-    p_support_email: settings.supportEmail,
-  });
-  if (error) throw error;
 }
 
 // ── Comunicazioni — Admin → Manager only, in-app (push doesn't work in Expo Go) ───────────────
@@ -178,4 +226,42 @@ export async function getBroadcasts(): Promise<Broadcast[]> {
 export async function createBroadcast(title: string, body: string): Promise<void> {
   const { error } = await supabase.rpc('admin_create_broadcast', { p_title: title, p_body: body });
   if (error) throw error;
+}
+
+// ── Admin actions log — Dashboard "Ultime azioni Admin" + its full "Vedi tutto" log ───────────
+
+export type AdminActionType =
+  | 'site_approved'
+  | 'site_suspended'
+  | 'site_status_changed'
+  | 'site_plan_changed'
+  | 'site_reassigned'
+  | 'manager_activated'
+  | 'manager_deactivated'
+  | 'owner_activated'
+  | 'owner_deactivated';
+
+export interface AdminActionEntry {
+  id: number;
+  adminName: string | null;
+  actionType: AdminActionType;
+  entityLabel: string | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/** Every approve/suspend/reassign/activate-deactivate the Admin has done — `admin_actions_log`,
+ * written atomically inside each of those RPCs (see the migration). Separate from `getGpsAuditLog`,
+ * which covers GPS geofence changes only. */
+export async function getActionsLog(limit = 15): Promise<AdminActionEntry[]> {
+  const { data, error } = await supabase.rpc('admin_get_actions_log', { p_limit: limit });
+  if (error) throw error;
+  return data.map((r) => ({
+    id: r.id,
+    adminName: r.admin_name,
+    actionType: r.action_type as AdminActionType,
+    entityLabel: r.entity_label,
+    detail: r.detail,
+    createdAt: r.created_at,
+  }));
 }

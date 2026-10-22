@@ -22,7 +22,7 @@ export function CheckinProvider({ children }: { children: ReactNode }) {
   const isRealClient = auth.status === 'active' && auth.profile.role === 'client';
 
   const mockValue = useCheckin(!isRealClient && current.site ? { site_id: current.site.site_id, name: current.site.name } : null);
-  const realValue = useRealCheckin(isRealClient && current.site ? { site_id: current.site.site_id } : null);
+  const realValue = useRealCheckin(isRealClient && current.site ? { site_id: current.site.site_id, name: current.site.name } : null);
 
   const value = isRealClient ? realValue : mockValue;
   return <CheckinContext.Provider value={value}>{children}</CheckinContext.Provider>;

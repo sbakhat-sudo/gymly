@@ -61,6 +61,28 @@ export const InfoIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** Equipment/structure issue reports — the Manager's "Issues" tab. */
+export const AlertTriangleIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M12 4 2.5 20h19Z" strokeLinejoin="round" />
+    <Path d="M12 10v4M12 17h.01" />
+  </Icon>
+);
+
+/** Row-level "more actions" trigger (a table row's "…" menu). */
+export const MoreIcon = (p: IconProps) => (
+  <Icon {...p} strokeWidth={p.strokeWidth ?? 2.6}>
+    <Path d="M12 5.5h.01M12 12h.01M12 18.5h.01" />
+  </Icon>
+);
+
+/** Column sort/reorder handle (a table header's drag affordance). */
+export const SortIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M8 7 5 4 2 7M5 4v16M16 17l3 3 3-3M19 20V4" />
+  </Icon>
+);
+
 export const CheckIcon = (p: IconProps) => (
   <Icon {...p}>
     <Path d="m5 12.5 4.5 4.5L19 7.5" />
@@ -70,6 +92,25 @@ export const CheckIcon = (p: IconProps) => (
 export const ChevronRightIcon = (p: IconProps) => (
   <Icon {...p}>
     <Path d="m9 5 7 7-7 7" />
+  </Icon>
+);
+
+export const CalendarIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M5 6a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" />
+    <Path d="M4 10h16M8 3v4M16 3v4" />
+  </Icon>
+);
+
+export const MinusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M5 12h14" />
+  </Icon>
+);
+
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M12 5v14M5 12h14" />
   </Icon>
 );
 
@@ -170,7 +211,7 @@ export const DumbbellIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** Gear: the Admin's "Parametri" row (distinct from the Impostazioni tab's SlidersIcon). */
+/** Gear: config/settings icon (distinct from the Impostazioni tab's SlidersIcon). */
 export const GearIcon = (p: IconProps) => (
   <Icon {...p}>
     <Circle cx={12} cy={12} r={3} />
@@ -182,5 +223,93 @@ export const EyeIcon = (p: IconProps) => (
   <Icon {...p}>
     <Path d="M1.5 12S5.5 4.5 12 4.5 22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12Z" />
     <Circle cx={12} cy={12} r={3} />
+  </Icon>
+);
+
+export const SearchIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Circle cx={11} cy={11} r={7} />
+    <Path d="M21 21l-4.3-4.3" />
+  </Icon>
+);
+
+export const DownloadIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M12 3v12" />
+    <Path d="M7 10l5 5 5-5" />
+    <Path d="M4 21h16" />
+  </Icon>
+);
+
+export const RefreshIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M3.5 12a8.5 8.5 0 0 1 14.5-6" />
+    <Path d="M20.5 12a8.5 8.5 0 0 1-14.5 6" />
+    <Path d="M18 3v4h-4" />
+    <Path d="M6 21v-4h4" />
+  </Icon>
+);
+
+/** "Orario migliore" suggestion card. */
+export const LightbulbIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M9 18h6M10 21h4" />
+    <Path d="M12 3a6 6 0 0 0-3.5 10.9c.6.44 1 1.17 1 1.95V16h5v-.15c0-.78.4-1.5 1-1.95A6 6 0 0 0 12 3Z" />
+  </Icon>
+);
+
+/** Rising-trend arrow: a card header icon and a "in crescita" badge glyph. */
+export const TrendingUpIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="m3 17 6-6 4 4 8-8" />
+    <Path d="M16 7h5v5" />
+  </Icon>
+);
+
+/** Speedometer: the Manager's "Occupazione" stat card. */
+export const GaugeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M4 15a8 8 0 1 1 16 0" />
+    <Path d="M12 15l4-5" strokeLinecap="round" />
+    <Path d="M12 15h.01" strokeLinecap="round" strokeWidth={(p.strokeWidth ?? 2) + 1} />
+  </Icon>
+);
+
+/** Stacked layers: the Coach's "Oggi" (today's hours) stat. */
+export const LayersIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="m12 3 9 5-9 5-9-5 9-5Z" strokeLinejoin="round" />
+    <Path d="m3 13 9 5 9-5" />
+    <Path d="m3 17 9 5 9-5" />
+  </Icon>
+);
+
+/** Ascending bars: the Coach's "Media settimanale" stat. */
+export const BarChartIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M5 20V12M12 20V4M19 20v-7" strokeLinecap="round" />
+  </Icon>
+);
+
+/** Map pin: the Manager's "Posizione palestra" lat/lng fields. */
+export const MapPinIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12Z" strokeLinejoin="round" />
+    <Circle cx={12} cy={9} r={2.5} />
+  </Icon>
+);
+
+/** Crosshair/target: GPS precision and the "use my position" action. */
+export const CrosshairIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Circle cx={12} cy={12} r={7} />
+    <Path d="M12 2v3M12 19v3M2 12h3M19 12h3" strokeLinecap="round" />
+  </Icon>
+);
+
+/** Chat bubble: "Message" actions (e.g. open a WhatsApp chat with someone). */
+export const MessageCircleIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" strokeLinejoin="round" />
   </Icon>
 );

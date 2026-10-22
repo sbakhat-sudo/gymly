@@ -67,15 +67,28 @@ export default function LoginScreen() {
           <LogoMark size={34} bgColor={theme.background} />
           <Wordmark size={22} />
         </View>
-        {router.canGoBack() ? (
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            style={{ width: MIN_TAP, height: MIN_TAP, borderRadius: MIN_TAP / 2, backgroundColor: theme.glassBorder, alignItems: 'center', justifyContent: 'center' }}>
-            <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
+        {/* Always rendered — reached with no navigation history at all (a fresh deep link, or Expo
+            Go reopening straight to this route) otherwise left no way back except closing the app.
+            Labelled (not just an icon) and high-contrast on purpose, after an icon-only circle proved
+            too easy to miss in testing. */}
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            minHeight: MIN_TAP,
+            paddingHorizontal: spacing.md,
+            borderRadius: MIN_TAP / 2,
+            backgroundColor: theme.glassBorder,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+          }}>
+          <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
+          <AppText style={{ fontWeight: '700', fontSize: 15 }}>{t('common.back')}</AppText>
+        </Pressable>
       </View>
 
       <View style={{ gap: 22, paddingHorizontal: 6 }}>

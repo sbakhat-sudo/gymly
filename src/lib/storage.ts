@@ -40,6 +40,11 @@ export const STORAGE_SCHEMAS = {
   checkinNotifOptIn: z.boolean(),
   /** Identifiers of the currently scheduled check-in notifications, to cancel them on check-out/confirm. */
   checkinNotificationIds: z.object({ stillHere: z.string().nullable(), autoCheckout: z.string().nullable() }),
+  /** Same idea as `checkinNotificationIds`, but for a real Client's repeating "sei ancora qui?"
+   * series (`notifications.ts#scheduleRepeatingStillHereReminders`) — a separate key because the
+   * shape differs (a list, not a fixed pair) and because a real Client never has an autoCheckout
+   * notification to track. */
+  realCheckinNotificationIds: z.array(z.string()),
   /** Appearance: 'auto' follows the OS scheme and reacts live; 'light'/'dark' force it. */
   themePref: z.enum(['auto', 'light', 'dark']),
   /** "Guarda l'affluenza senza account" chosen on Benvenuto: the member app opens without signing in. */
@@ -50,16 +55,51 @@ export const STORAGE_SCHEMAS = {
   pendingRegistration: z.object({
     role: z.enum(['client', 'coach']),
     fullName: z.string(),
+    phone: z.string(),
     siteId: SiteIdSchema.nullable(),
   }),
   /** The plan (+ full name, same reason `pendingRegistration` keeps one) a prospective Manager
    * picked on the signup screen, before the account exists. Replayed the same way as
    * `pendingRegistration` once a session is available. */
   pendingManagerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string() }),
+  /** Same role as `pendingManagerPlan`, for the Owner's own signup (`OwnerSignupScreen.tsx`) —
+   * Manager no longer self-registers at all, this is its replacement. */
+  pendingOwnerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string() }),
   /** The last geofence "you're near the gym" notification `geofenceTask.ts` actually sent —
    * debounces it to at most once an hour. One fixed key, not one per site, is enough: a client
    * belongs to exactly one gym (see `useSyncGeofences.ts`'s own comment on the same constraint). */
   geofenceLastNotify: z.object({ siteId: SiteIdSchema, sentAt: Rfc3339UtcSchema }),
+  /** Newest `broadcasts.created_at` the Manager has opened the notifications panel since — anything
+   * newer counts as unread (ManagerNotifications.tsx). `null` until the panel's been opened once. */
+  managerLastSeenBroadcastAt: Rfc3339UtcSchema.nullable(),
+  /** IDs (`request-<userId>` / `issue-<id>`) of pending requests/issues the Manager has tapped
+   * through to, or marked read in bulk — a watermark timestamp doesn't work for these the way it
+   * does for broadcasts, since the Manager can open an older one after a newer one without that
+   * meaning everything older is now "seen" too. Capped (see `ManagerNotifications.tsx`) so this
+   * can't grow forever as items get approved/resolved and drop off the pending list. */
+  managerSeenNotificationIds: z.array(z.string()).max(500),
+  /** Same idea as `managerSeenNotificationIds`, for the Coach's own unanswered-rating bell. */
+  coachSeenNotificationIds: z.array(z.string()).max(500),
+  /** The real Client's own weekly check-in target, chosen in Impostazioni — local-only, like
+   * lang/theme, never synced server-side. Defaults to 3 when unset. */
+  weeklyGoal: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  /** Set right after a checkout that has something to say (goal progress or just reached) — the
+   * Home screen reads and clears it once, so the popup "appears right after check-out" without the
+   * Check-in tab needing to navigate anywhere itself. */
+  pendingGoalMessage: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('progress'), remaining: z.number().int().min(1).max(10) }),
+    z.object({ kind: z.literal('reached') }),
+  ]),
+  /** The Monday (`YYYY-MM-DD`, local calendar) of the last week whose "goal missed" popup has
+   * already been shown — there's no real scheduled push in this project (Expo Go constraint), so
+   * this is checked on the Home screen's own mount instead; this key stops it from repeating every
+   * time the Client opens the app during the following week. */
+  goalWeekMessageShownFor: DateKeySchema,
+  /** Resolved-issue banner ids (`ResolvedIssueBanner.tsx`) the Client has dismissed themselves — a
+   * banner stays until the Client clears it or it naturally drops off tomorrow (`getMyIssuesResolvedToday`
+   * stops returning it), whichever comes first. Capped the same way `managerSeenNotificationIds` is,
+   * so a very active gym's full history of dismissed banners can't grow this key forever. */
+  dismissedResolvedIssueIds: z.array(z.number().int()).max(200),
 } as const;
 
 export type StorageKey = keyof typeof STORAGE_SCHEMAS;

@@ -59,3 +59,25 @@ export async function realConfirmStillHere(checkinId: number): Promise<string> {
   if (error) throw error;
   return nowIso;
 }
+
+export interface ShiftHistoryEntry {
+  id: number;
+  checkinAt: string;
+  checkoutAt: string | null;
+}
+
+/** The caller's own check-in/check-out history at this site (open and closed), most recent first —
+ * the Coach's "ore di lavoro" register. RLS (`checkins_select_own`) already scopes this to their own
+ * rows; the explicit `user_id` filter just keeps the query shaped like every other one in this module. */
+export async function getOwnCheckinHistory(userId: string, siteId: string, kind: 'client' | 'coach'): Promise<ShiftHistoryEntry[]> {
+  const { data, error } = await supabase
+    .from('checkins')
+    .select('id, checkin_at, checkout_at')
+    .eq('user_id', userId)
+    .eq('site_id', siteId)
+    .eq('kind', kind)
+    .order('checkin_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return data.map((r) => ({ id: r.id, checkinAt: r.checkin_at, checkoutAt: r.checkout_at }));
+}

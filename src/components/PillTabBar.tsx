@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useState, type ReactNode } from 'react';
-import { Platform, Pressable, View, type ViewStyle } from 'react-native';
+import { Platform, Pressable, ScrollView, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/lib/auth/auth-context';
@@ -10,7 +10,6 @@ import { SIDEBAR_WIDTH, useSidebarMode } from '@/lib/use-sidebar-mode';
 
 import { AppText } from './AppText';
 import { Avatar } from './Avatar';
-import { ConfirmDialog } from './ConfirmDialog';
 import { LogOutIcon } from './icons';
 
 const BAR_HEIGHT = 68;
@@ -104,7 +103,10 @@ function Pill({ state, descriptors, navigation, insets }: BottomTabBarProps) {
 }
 
 /** One icon button in the sidebar: on hover (web only — native ignores `onHoverIn`/`onHoverOut`),
- * shows the section's name in a dark pill to its right so the column can stay icon-only and slim. */
+ * shows the section's name in a filled pill to its right so the column can stay icon-only and
+ * slim. (It can't go to the left instead — the sidebar already sits right at the screen's own left
+ * edge, with only ~16px of margin, nowhere near enough room for a label-width pill to fit before
+ * running off-screen.) */
 function SidebarItem({
   icon,
   label,
@@ -147,18 +149,17 @@ function SidebarItem({
           style={[
             {
               position: 'absolute',
-              left: '100%',
+              left: 88,
               top: '50%',
               marginTop: -17,
-              marginLeft: 12,
-              paddingHorizontal: 14,
-              paddingVertical: 9,
-              borderRadius: radius.md,
-              backgroundColor: theme.text,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: radius.sm,
+              backgroundColor: '#000000',
             },
             tooltipGlow(),
           ]}>
-          <AppText color={theme.background} numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', letterSpacing: -0.2 }}>
+          <AppText color="#FFFFFF" numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', letterSpacing: -0.2 }}>
             {label}
           </AppText>
         </View>
@@ -172,10 +173,9 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { t } = useI18n();
   const auth = useAuth();
   const insets = useSafeAreaInsets();
-  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const activeRoute = state.routes[state.index];
-  const profile = auth.status === 'active' || auth.status === 'admin' ? auth.profile : null;
-  const roleLabel = profile ? t(`sidebar.role.${profile.role}` as 'sidebar.role.manager' | 'sidebar.role.coach' | 'sidebar.role.admin') : null;
+  const profile = auth.status === 'active' || auth.status === 'admin' || auth.status === 'owner' ? auth.profile : null;
+  const roleLabel = profile ? t(`sidebar.role.${profile.role}` as 'sidebar.role.manager' | 'sidebar.role.coach' | 'sidebar.role.admin' | 'sidebar.role.owner') : null;
 
   const goTo = (routeName: string, routeKey: string): void => {
     const event = navigation.emit({ type: 'tabPress', target: routeKey, canPreventDefault: true });
@@ -199,11 +199,16 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
             borderColor: theme.glassBorder,
             paddingVertical: spacing.xl,
             alignItems: 'center',
-            justifyContent: 'space-between',
           },
           glow(),
         ]}>
-        <View style={{ gap: spacing.sm, alignItems: 'center' }}>
+        {/* `flex: 1` + its own scroll: with enough tabs (Manager now has 8) the column can outgrow a
+            short window — without this the overflow was simply clipped, hiding the last tabs and
+            sign-out entirely with no way to reach them. Sign-out stays outside, always pinned. */}
+        <ScrollView
+          style={{ flex: 1, width: '100%' }}
+          contentContainerStyle={{ gap: spacing.sm, alignItems: 'center', paddingBottom: spacing.sm }}
+          showsVerticalScrollIndicator={false}>
           {profile ? (
             <View style={{ alignItems: 'center', gap: 4, marginBottom: spacing.md }}>
               <Avatar uri={profile.avatarUrl} name={profile.fullName} size={48} />
@@ -231,25 +236,12 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
               />
             );
           })}
-        </View>
+        </ScrollView>
 
-        {auth.status === 'active' ? (
-          <SidebarItem label={t('account.signOut')} focused={false} danger onPress={() => setConfirmingSignOut(true)} icon={(color) => <LogOutIcon color={color} size={22} strokeWidth={2.2} />} />
+        {auth.status === 'active' || auth.status === 'admin' || auth.status === 'owner' ? (
+          <SidebarItem label={t('account.signOut')} focused={false} danger onPress={() => void auth.signOut()} icon={(color) => <LogOutIcon color={color} size={22} strokeWidth={2.2} />} />
         ) : null}
       </View>
-
-      <ConfirmDialog
-        visible={confirmingSignOut}
-        title={t('account.signOut.confirm.title')}
-        message=""
-        confirmLabel={t('account.signOut.confirm.action')}
-        destructive
-        onConfirm={() => {
-          setConfirmingSignOut(false);
-          void auth.signOut();
-        }}
-        onCancel={() => setConfirmingSignOut(false)}
-      />
     </View>
   );
 }

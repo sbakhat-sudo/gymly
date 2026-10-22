@@ -12,7 +12,7 @@ import { useCurrentSite } from '@/lib/sites-context';
 import { useTheme } from '@/lib/theme';
 
 const LEFT_TABS = ['index', 'orari'] as const;
-const RIGHT_TABS = ['punti', 'impostazioni'] as const;
+const RIGHT_TABS = ['feedback', 'impostazioni'] as const;
 const CHECKIN_ROUTE = 'checkin';
 const FAB_SIZE = 76;
 const BAR_HEIGHT = 68;

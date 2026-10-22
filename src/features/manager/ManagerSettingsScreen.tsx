@@ -3,28 +3,38 @@ import { View } from 'react-native';
 import { AccountSection } from '@/components/AccountSection';
 import { AppText } from '@/components/AppText';
 import { Card, SectionLabel } from '@/components/Card';
+import { SlidersIcon } from '@/components/icons';
 import { ProfileSection } from '@/components/ProfileSection';
 import { Screen } from '@/components/Screen';
 import { Segmented } from '@/components/Segmented';
 import { SignOutButton } from '@/components/SignOutButton';
 import { useAppState } from '@/lib/app-state';
 import { useI18n, type Lang } from '@/lib/i18n';
+import { usePageHeader } from '@/lib/page-header-context';
 import { spacing } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
+import { ManagerNotifications } from './ManagerNotifications';
 import { getBroadcasts } from './manager-api';
 
 export function ManagerSettingsScreen() {
   const { t, lang } = useI18n();
   const { setLang } = useAppState();
   const broadcasts = useAsync(() => getBroadcasts(), []);
+  // This screen's own header is a plain text title (no icon) — kept as-is below for narrow/native.
+  // Sidebar mode's fixed `RoleTopBar` still needs a title to show while this tab is active, so it
+  // registers one with the same icon its sidebar tab uses.
+  usePageHeader(SlidersIcon, t('settings.title'));
 
   return (
     <Screen>
       <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-        <AppText variant="display" style={{ fontSize: 32 }}>
-          {t('settings.title')}
-        </AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <AppText variant="display" style={{ fontSize: 32 }}>
+            {t('settings.title')}
+          </AppText>
+          <ManagerNotifications />
+        </View>
         <SignOutButton />
       </View>
 

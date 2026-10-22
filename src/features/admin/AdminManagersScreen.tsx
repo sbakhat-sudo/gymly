@@ -4,14 +4,21 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { ActionSheet, type ActionSheetAction } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
-import { SectionLabel } from '@/components/Card';
-import { ChevronRightIcon } from '@/components/icons';
+import { GroupHeader } from '@/components/GroupHeader';
+import { ChevronRightIcon, ClockIcon, DumbbellIcon, UsersIcon } from '@/components/icons';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/lib/theme';
 
-import { getPendingManagers, getSites, setManagerStatus, setSiteStatus, type AdminSite, type PendingManager, type SitePlan } from './admin-api';
+import { AdminActionRow } from './AdminActionRow';
+import { getActionsLog, getPendingOwners, getSites, setOwnerStatus, setSiteStatus, type AdminActionType, type AdminSite, type PendingManager, type SitePlan } from './admin-api';
+
+/** Request-decision action types only — site/manager plan/GPS/reassign changes have their own log
+ * elsewhere (Dashboard's "Ultime azioni Admin"), not shown as part of this page's request history. */
+const REQUEST_HISTORY_TYPES: AdminActionType[] = ['site_approved', 'site_suspended', 'manager_activated', 'manager_deactivated', 'owner_activated', 'owner_deactivated'];
 
 const PLAN_LABEL_KEY: Record<SitePlan, TranslationKey> = {
   trial: 'admin.sites.plan.trial',
@@ -19,24 +26,31 @@ const PLAN_LABEL_KEY: Record<SitePlan, TranslationKey> = {
   business: 'admin.sites.plan.business',
 };
 
-/** Admin's reach is Manager accounts only — never coach or client directly (those stay each gym's own Manager's job). */
+/** Admin approves pending Owner signups (Manager no longer self-registers — a Manager account is
+ * only ever created directly, already active, by an Owner). Internal names here still say "manager"
+ * in a few spots (`ManagerRow`, `managerSheetActions`, `decideManager`) — purely cosmetic leftovers
+ * from before that changed, not a sign this still operates on Manager accounts; the actual data
+ * source below is `getPendingOwners()`. */
 export function AdminManagersScreen() {
   const { t } = useI18n();
   const theme = useTheme();
-  const managers = useAsync(() => getPendingManagers(), []);
+  const managers = useAsync(() => getPendingOwners(), []);
   const sites = useAsync(() => getSites(), []);
+  const actionsLog = useAsync(() => getActionsLog(50), []);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [sheetSite, setSheetSite] = useState<AdminSite | null>(null);
   const [sheetManager, setSheetManager] = useState<PendingManager | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null);
 
   const pendingSites = (sites.data ?? []).filter((s) => s.approvalStatus === 'pending_approval');
   const pendingManagers = managers.data ?? [];
+  const requestHistory = (actionsLog.data ?? []).filter((a) => REQUEST_HISTORY_TYPES.includes(a.actionType));
   const loading = (managers.loading && managers.data === undefined) || (sites.loading && sites.data === undefined);
-  const nothingPending = managers.data !== undefined && sites.data !== undefined && pendingManagers.length === 0 && pendingSites.length === 0;
 
   function reloadAll(): void {
     managers.reload();
     sites.reload();
+    actionsLog.reload();
   }
 
   async function decideSite(site: AdminSite, status: 'active' | 'suspended'): Promise<void> {
@@ -44,6 +58,7 @@ export function AdminManagersScreen() {
     try {
       await setSiteStatus(site.siteId, status);
       sites.reload();
+      actionsLog.reload();
       setSheetSite(null);
     } finally {
       setBusyId(null);
@@ -53,8 +68,9 @@ export function AdminManagersScreen() {
   async function decideManager(manager: PendingManager, status: 'active' | 'rejected'): Promise<void> {
     setBusyId(manager.userId);
     try {
-      await setManagerStatus(manager.userId, status);
+      await setOwnerStatus(manager.userId, status);
       managers.reload();
+      actionsLog.reload();
       setSheetManager(null);
     } finally {
       setBusyId(null);
@@ -64,23 +80,47 @@ export function AdminManagersScreen() {
   const siteSheetActions: ActionSheetAction[] = sheetSite
     ? [
         { label: t('admin.sites.approve'), onPress: () => void decideSite(sheetSite, 'active'), disabled: busyId === sheetSite.siteId },
-        { label: t('admin.managers.reject'), destructive: true, onPress: () => void decideSite(sheetSite, 'suspended'), disabled: busyId === sheetSite.siteId },
+        {
+          label: t('admin.managers.reject'),
+          destructive: true,
+          onPress: () => {
+            setSheetSite(null);
+            setPendingConfirm({
+              title: t('admin.managers.rejectSite.confirm.title'),
+              message: t('admin.managers.rejectSite.confirm.body', { site: sheetSite.name }),
+              confirmLabel: t('admin.managers.reject'),
+              onConfirm: () => void decideSite(sheetSite, 'suspended'),
+            });
+          },
+          disabled: busyId === sheetSite.siteId,
+        },
       ]
     : [];
 
   const managerSheetActions: ActionSheetAction[] = sheetManager
     ? [
         { label: t('admin.sites.approve'), onPress: () => void decideManager(sheetManager, 'active'), disabled: busyId === sheetManager.userId },
-        { label: t('admin.managers.reject'), destructive: true, onPress: () => void decideManager(sheetManager, 'rejected'), disabled: busyId === sheetManager.userId },
+        {
+          label: t('admin.managers.reject'),
+          destructive: true,
+          onPress: () => {
+            setSheetManager(null);
+            setPendingConfirm({
+              title: t('admin.managers.rejectManager.confirm.title'),
+              message: t('admin.managers.rejectManager.confirm.body', { manager: sheetManager.fullName ?? t('common.unnamedPerson') }),
+              confirmLabel: t('admin.managers.reject'),
+              onConfirm: () => void decideManager(sheetManager, 'rejected'),
+            });
+          },
+          disabled: busyId === sheetManager.userId,
+        },
       ]
     : [];
 
   return (
     <Screen onRefresh={reloadAll} refreshing={(managers.loading || sites.loading) && !loading}>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.md }}>
-        <AppText variant="display" style={{ fontSize: 32 }}>
-          {t('admin.managers.title')}
-        </AppText>
+        <ScreenHeader icon={UsersIcon} label={t('admin.managers.title')} />
         <AppText muted style={{ fontSize: 14 }}>
           {t('admin.dashboard.pendingApprovals')}
         </AppText>
@@ -88,11 +128,10 @@ export function AdminManagersScreen() {
 
       {managers.error || sites.error ? <Banner title={t('admin.sites.error')} /> : null}
       {loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {nothingPending ? <Banner message={t('admin.dashboard.pendingApprovals.empty')} /> : null}
 
       {pendingManagers.length > 0 ? (
         <>
-          <SectionLabel>{t('admin.managers.newManagers')}</SectionLabel>
+          <GroupHeader icon={UsersIcon} label={t('admin.managers.newOwners')} />
           <View style={{ borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>
             {pendingManagers.map((m, i) => (
               <ManagerRow key={m.userId} manager={m} showDivider={i > 0} onPress={() => setSheetManager(m)} />
@@ -103,13 +142,29 @@ export function AdminManagersScreen() {
 
       {pendingSites.length > 0 ? (
         <>
-          <SectionLabel>{t('admin.managers.newGyms')}</SectionLabel>
+          <GroupHeader icon={DumbbellIcon} label={t('admin.managers.newGyms')} />
           <View style={{ borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>
             {pendingSites.map((s, i) => (
               <SiteRow key={s.siteId} site={s} showDivider={i > 0} onPress={() => setSheetSite(s)} />
             ))}
           </View>
         </>
+      ) : null}
+
+      <GroupHeader icon={ClockIcon} label={t('admin.managers.history.title')} />
+      {actionsLog.error ? <Banner title={t('admin.actionsLog.error')} /> : null}
+      {actionsLog.data === undefined && actionsLog.loading ? <ActivityIndicator style={{ marginTop: spacing.sm }} /> : null}
+      {actionsLog.data && requestHistory.length === 0 ? (
+        <AppText variant="caption" muted>
+          {t('admin.managers.history.empty')}
+        </AppText>
+      ) : null}
+      {requestHistory.length > 0 ? (
+        <View style={{ borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>
+          {requestHistory.map((entry, i, rows) => (
+            <AdminActionRow key={entry.id} entry={entry} last={i === rows.length - 1} absolute />
+          ))}
+        </View>
       ) : null}
 
       <ActionSheet
@@ -125,6 +180,19 @@ export function AdminManagersScreen() {
         subtitle={sheetManager?.requestedPlan ? t(PLAN_LABEL_KEY[sheetManager.requestedPlan]) : undefined}
         actions={managerSheetActions}
         onClose={() => setSheetManager(null)}
+      />
+
+      <ConfirmDialog
+        visible={pendingConfirm !== null}
+        destructive
+        title={pendingConfirm?.title ?? ''}
+        message={pendingConfirm?.message ?? ''}
+        confirmLabel={pendingConfirm?.confirmLabel ?? ''}
+        onConfirm={() => {
+          pendingConfirm?.onConfirm();
+          setPendingConfirm(null);
+        }}
+        onCancel={() => setPendingConfirm(null)}
       />
     </Screen>
   );

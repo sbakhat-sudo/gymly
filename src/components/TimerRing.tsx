@@ -80,11 +80,22 @@ export function TimerRing({
       </View>
       <AppText
         numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.6}
-        style={{ fontFamily: fontFamily.mono, fontSize: size * 0.2, fontVariant: ['tabular-nums'], maxWidth: innerR * 1.9 }}>
+        style={{ fontFamily: fontFamily.mono, fontSize: labelFontSize(label, size, innerR), fontVariant: ['tabular-nums'], maxWidth: innerR * 1.9 }}>
         {label}
       </AppText>
     </View>
   );
+}
+
+/** `adjustsFontSizeToFit`/`minimumFontScale` are iOS/Android-only — react-native-web doesn't
+ * implement either, so on this project's web-only screens (the Manager's presence list is the one
+ * caller) the label never actually shrank and just truncated with "…" once a shift passed an hour
+ * (`formatStopwatch`'s "H:MM:SS" form is longer than its usual "MM:SS"). Sizing the font from the
+ * label's own length instead — a plain character-width estimate for the monospace face — shrinks it
+ * correctly on every platform, not just the ones the native-only prop happens to cover. */
+function labelFontSize(label: string, size: number, innerR: number): number {
+  const base = size * 0.2;
+  const maxWidth = innerR * 1.9;
+  const estimatedWidth = label.length * base * 0.62;
+  return estimatedWidth > maxWidth ? Math.max(size * 0.11, maxWidth / (label.length * 0.62)) : base;
 }

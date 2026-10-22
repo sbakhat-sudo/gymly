@@ -1,0 +1,13 @@
+-- Explicit, confirmed product decision: a real Client is NEVER auto-checked-out by the server either
+-- (see the client-side half of this change in use-real-checkin.ts, which caps `resolveCheckinPhase`
+-- at 'awaitingConfirmation' and repeats the "sei ancora qui?" reminder every 10 minutes instead of
+-- ever reaching autoCheckedOut). `close_stale_checkins` (20261021000000) already only ever touched
+-- `kind = 'client'` rows after the coach bug was fixed, so with client auto-checkout removed too it
+-- has no remaining purpose — unscheduled outright rather than left to run as a silent no-op.
+--
+-- A forgotten check-in now stays open in `checkins` until the Client (or a Manager doing cleanup)
+-- closes it manually — there is no safety net, by explicit choice. This does NOT make the Manager's
+-- live occupancy lie forever: `get_live_band`/`get_weekly_stats` already exclude any check-in open
+-- longer than 12 hours from the live count (`checkin_at > now() - interval '12 hours'`, see
+-- 20261020000000) — a display-only filter, not a check-out. The open row itself is untouched.
+select cron.unschedule('close_stale_checkins');

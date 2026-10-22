@@ -62,6 +62,7 @@ interface Options {
   now?: Date;
   sessionCount?: number;
   themePref?: 'auto' | 'light' | 'dark';
+  guest?: boolean;
 }
 
 function makeServices(o: Options): Services {
@@ -80,7 +81,7 @@ function tree(services: Services, o: Options, ui: ReactNode) {
     memberSiteId: o.memberSiteId ?? null,
     sessionCount: o.sessionCount ?? 1,
     themePref: o.themePref ?? 'auto',
-    guest: false,
+    guest: o.guest ?? false,
   };
   return (
     <AppProviders
@@ -216,17 +217,6 @@ describe('Home', () => {
     expect(await hero('Crowded. Very busy right now')).toBeTruthy();
     expect(screen.getByText(/updated \d+ seconds? ago/)).toBeTruthy();
     expect(screen.getByText(/Next quiet window/)).toBeTruthy();
-  });
-
-  it('shows the points chip only when the member is linked', async () => {
-    await show(<HomeScreen />, { siteId: A });
-    await hero(RED_HERO);
-    expect(screen.queryByLabelText('Hai 330 punti. Apri la sezione Punti')).toBeNull();
-  });
-
-  it('linked member: chip with the balance', async () => {
-    await show(<HomeScreen />, { siteId: A, memberSiteId: A });
-    expect(await screen.findByLabelText('Hai 330 punti. Apri la sezione Punti')).toBeTruthy();
   });
 
   it('a gym without zones shows no zone card (site B)', async () => {
@@ -427,27 +417,31 @@ describe('Settings', () => {
 
   it('switches language to English immediately', async () => {
     const user = userEvent.setup();
-    await show(<SettingsScreen />, { siteId: A });
+    // `guest: true` here only so the existing "Delete my data" text is still on screen to prove
+    // the switch took effect — language switching itself is identical for a real Client.
+    await show(<SettingsScreen />, { siteId: A, guest: true });
     await user.press(await screen.findByRole('radio', { name: 'English' }));
     expect(await screen.findByText('Delete my data')).toBeTruthy();
     expect(await storage.get('lang')).toBe('en');
   });
 
+  // Local alert prefs, "Cancella i miei dati" and the privacy note are guest/demo-flow-only —
+  // see SettingsScreen.tsx's own comment on why a real, authenticated Client doesn't get them.
   it('alerts cannot be enabled on the first session, and the app asks for no permission', async () => {
-    await show(<SettingsScreen />, { siteId: A, sessionCount: 1 });
+    await show(<SettingsScreen />, { siteId: A, sessionCount: 1, guest: true });
     expect(await screen.findByText('Disponibile dalla prossima apertura dell’app, dopo che avrai visto l’affluenza.')).toBeTruthy();
     const toggle = screen.getByRole('switch', { name: 'Avvisami quando è libera' });
     expect(toggle.props.disabled ?? toggle.props.accessibilityState?.disabled).toBeTruthy();
   });
 
   it('second session but no value seen yet: still locked', async () => {
-    await show(<SettingsScreen />, { siteId: A, sessionCount: 2 });
+    await show(<SettingsScreen />, { siteId: A, sessionCount: 2, guest: true });
     expect(await screen.findByText(/Disponibile dalla prossima apertura/)).toBeTruthy();
   });
 
   it('second session after seeing a band: the toggle is offered', async () => {
     await storage.set('valueSeen', true);
-    await show(<SettingsScreen />, { siteId: A, sessionCount: 2 });
+    await show(<SettingsScreen />, { siteId: A, sessionCount: 2, guest: true });
     await screen.findByText('Avvisi “palestra libera”');
     await waitFor(() => expect(screen.queryByText(/Disponibile dalla prossima apertura/)).toBeNull());
   });
@@ -457,7 +451,7 @@ describe('Settings', () => {
     await storage.set('siteId', A);
     await storage.set('memberSiteId', A);
     await storage.set('lang', 'it');
-    await show(<SettingsScreen />, { siteId: A, memberSiteId: A });
+    await show(<SettingsScreen />, { siteId: A, memberSiteId: A, guest: true });
 
     await user.press(await screen.findByRole('button', { name: 'Cancella i miei dati' }));
     expect(await screen.findByText('Cancellare i dati su questo dispositivo?')).toBeTruthy();
@@ -473,8 +467,15 @@ describe('Settings', () => {
   });
 
   it('shows the privacy note in Italian and the version', async () => {
-    await show(<SettingsScreen />, { siteId: A });
+    await show(<SettingsScreen />, { siteId: A, guest: true });
     expect(await screen.findByText(/Per usare Gymly serve un account/)).toBeTruthy();
     expect(screen.getByText(/Versione /)).toBeTruthy();
+  });
+
+  it('a real (non-guest) Client never sees the guest-only alerts/delete-data/privacy cards', async () => {
+    await show(<SettingsScreen />, { siteId: A });
+    expect(screen.queryByText('Avvisi “palestra libera”')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancella i miei dati' })).toBeNull();
+    expect(screen.queryByText(/Per usare Gymly serve un account/)).toBeNull();
   });
 });

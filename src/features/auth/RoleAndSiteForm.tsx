@@ -20,6 +20,7 @@ interface SiteOption {
 export interface RoleAndSiteValues {
   role: Role;
   fullName: string;
+  phone: string;
   siteId: string | null;
 }
 
@@ -42,6 +43,7 @@ export interface RoleAndSiteValues {
 export function useRoleAndSiteFields(initialRole: Role = 'client') {
   const [role] = useState<Role>(initialRole);
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [sites, setSites] = useState<SiteOption[] | null>(null);
   const [sitesError, setSitesError] = useState(false);
   const [siteQuery, setSiteQuery] = useState('');
@@ -70,6 +72,8 @@ export function useRoleAndSiteFields(initialRole: Role = 'client') {
     role,
     fullName,
     setFullName,
+    phone,
+    setPhone,
     sites,
     sitesError,
     siteQuery,
@@ -77,7 +81,7 @@ export function useRoleAndSiteFields(initialRole: Role = 'client') {
     filteredSites,
     matchedSite,
     isValid: matchedSite !== null,
-    values: (): RoleAndSiteValues => ({ role, fullName, siteId: matchedSite?.site_id ?? null }),
+    values: (): RoleAndSiteValues => ({ role, fullName, phone, siteId: matchedSite?.site_id ?? null }),
   };
 }
 
@@ -92,7 +96,7 @@ export type RoleAndSiteFieldsState = ReturnType<typeof useRoleAndSiteFields>;
 export function RoleAndSiteFields({ fields }: { fields: RoleAndSiteFieldsState }) {
   const { t } = useI18n();
   const theme = useTheme();
-  const { role, fullName, setFullName, sites, sitesError, siteQuery, setSiteQuery, filteredSites, matchedSite } = fields;
+  const { role, fullName, setFullName, phone, setPhone, sites, sitesError, siteQuery, setSiteQuery, filteredSites, matchedSite } = fields;
 
   const inputStyle = {
     minHeight: MIN_TAP + 4,
@@ -127,6 +131,23 @@ export function RoleAndSiteFields({ fields }: { fields: RoleAndSiteFieldsState }
           accessibilityLabel={t('auth.signup.fullName')}
           autoComplete="name"
           textContentType="name"
+          style={inputStyle}
+        />
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <AppText variant="caption" style={{ fontWeight: '600' }}>
+          {t('auth.signup.phone')}
+        </AppText>
+        <TextInput
+          value={phone}
+          onChangeText={setPhone}
+          placeholder={t('auth.signup.phone')}
+          placeholderTextColor={theme.textMuted}
+          accessibilityLabel={t('auth.signup.phone')}
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
           style={inputStyle}
         />
       </View>
@@ -180,6 +201,7 @@ export async function submitRoleAndSite(v: RoleAndSiteValues): Promise<string | 
     p_role: v.role,
     p_site_id: v.siteId,
     p_full_name: v.fullName.trim() || null,
+    p_phone: v.phone.trim() || null,
   });
   return error?.message ?? null;
 }

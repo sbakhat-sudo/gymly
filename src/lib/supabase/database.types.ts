@@ -27,6 +27,10 @@ export interface Database {
           approval_status: 'pending_approval' | 'active' | 'suspended';
           approved_at: string | null;
           plan: 'trial' | 'pro' | 'business';
+          band_green_pct: number;
+          band_amber_pct: number;
+          notify_manager_on_threshold: boolean;
+          chain_id: string | null;
           created_at: string;
         };
         Insert: never; // only via create_manager_site()
@@ -39,7 +43,11 @@ export interface Database {
           capacity_reference: number;
           points_enabled: boolean;
           manually_open: boolean;
+          band_green_pct: number;
+          band_amber_pct: number;
+          notify_manager_on_threshold: boolean;
           // approval_status/approved_at are NOT updatable directly — only via admin_set_site_status().
+          // chain_id is NOT updatable directly — only set once via create_manager_site().
         }>;
         Relationships: [];
       };
@@ -47,7 +55,7 @@ export interface Database {
         Row: {
           id: string;
           /** 'unclaimed' = placeholder row created by the auth.users trigger before signup finishes — never a real role. */
-          role: 'manager' | 'coach' | 'client' | 'admin' | 'unclaimed';
+          role: 'manager' | 'coach' | 'client' | 'admin' | 'owner' | 'unclaimed';
           site_id: string | null;
           status: 'pending' | 'active' | 'rejected';
           full_name: string | null;
@@ -62,6 +70,18 @@ export interface Database {
           activated_at: string | null;
           deactivated_at: string | null;
           phone: string | null;
+          /** Real, Manager/Owner-set fields — no payment processor in this project, so this is a
+           * fact recorded by hand, never a computed/invented number. Only via owner_set_client_payment(). */
+          membership_type: 'annual' | 'monthly' | null;
+          payment_status: 'paid' | 'unpaid' | null;
+          /** false for every Client that existed before the subscriptions feature shipped (backfilled
+           * once) — a brand-new Client with no `subscriptions` row AND this still true is the one who
+           * must see the mandatory plan-choice popup. See client_get_my_subscription(). */
+          subscription_required: boolean;
+          /** Set once, the moment an approved Owner creates their gym_chains row (create_owner_chain())
+           * — same role for Owner that site_id already plays for Manager: "hasn't created their own
+           * thing yet" is this being null, not a separate status. */
+          chain_id: string | null;
         };
         Insert: {
           id: string;
@@ -174,6 +194,12 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      gym_chains: {
+        Row: { id: string; name: string; owner_id: string | null; hq_address: string | null; plan: 'trial' | 'pro' | 'business'; created_at: string };
+        Insert: never; // only via create_manager_site()/create_owner_chain()
+        Update: never;
+        Relationships: [];
+      };
       redemptions: {
         Row: {
           id: string;
@@ -201,19 +227,144 @@ export interface Database {
         Update: Partial<{ status: string }>;
         Relationships: [];
       };
+      coach_ratings: {
+        Row: {
+          id: number;
+          checkin_id: number;
+          client_id: string;
+          coach_id: string;
+          rating: number;
+          comment: string | null;
+          coach_reply: string | null;
+          manager_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: { checkin_id: number; client_id: string; coach_id: string; rating: number; comment?: string | null };
+        Update: never; // coach_reply/manager_note only via coach_reply_to_rating()/manager_note_on_rating()
+        Relationships: [];
+      };
+      issue_reports: {
+        Row: {
+          id: number;
+          checkin_id: number;
+          client_id: string;
+          description: string | null;
+          severity: 'urgent' | 'minor' | null;
+          status: 'pending' | 'resolved';
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: { checkin_id: number; client_id: string; description?: string | null };
+        Update: never; // severity/status only via manager_set_issue_severity()/manager_resolve_issue()
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          user_id: string;
+          site_id: string;
+          plan_type: 'monthly' | 'annual';
+          status: 'active' | 'grace' | 'blocked';
+          start_date: string;
+          expiry_date: string;
+          last_payment_date: string;
+          grace_end_date: string | null;
+          warning_sent_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never; // only via client_choose_plan()/manager_assign_plan()
+        Update: never; // only via client_confirm_payment_during_grace()/client_switch_plan()
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      get_my_site_coaches: {
+        Args: Record<string, never>;
+        Returns: { id: string; full_name: string | null }[];
+      };
+      coach_get_my_ratings: {
+        Args: Record<string, never>;
+        Returns: { id: number; created_at: string; client_name: string; rating: number; comment: string | null; coach_reply: string | null; manager_note: string | null }[];
+      };
+      client_get_my_ratings: {
+        Args: Record<string, never>;
+        Returns: { id: number; checkin_id: number; created_at: string; coach_id: string; coach_name: string; rating: number; comment: string | null; coach_reply: string | null }[];
+      };
+      client_get_site_issues_resolved_today: {
+        Args: Record<string, never>;
+        Returns: { id: number; description: string | null; resolved_at: string }[];
+      };
+      coach_reply_to_rating: {
+        Args: { p_rating_id: number; p_reply: string };
+        Returns: undefined;
+      };
+      manager_note_on_rating: {
+        Args: { p_rating_id: number; p_note: string };
+        Returns: undefined;
+      };
+      manager_get_ratings: {
+        Args: Record<string, never>;
+        Returns: {
+          id: number;
+          created_at: string;
+          client_name: string;
+          coach_id: string;
+          coach_name: string;
+          rating: number;
+          comment: string | null;
+          coach_reply: string | null;
+          manager_note: string | null;
+        }[];
+      };
+      manager_get_issues: {
+        Args: Record<string, never>;
+        Returns: {
+          id: number;
+          created_at: string;
+          client_id: string;
+          client_name: string;
+          description: string | null;
+          severity: 'urgent' | 'minor' | null;
+          status: 'pending' | 'resolved';
+          resolved_at: string | null;
+        }[];
+      };
+      manager_set_issue_severity: {
+        Args: { p_issue_id: number; p_severity: 'urgent' | 'minor' };
+        Returns: undefined;
+      };
+      manager_resolve_issue: {
+        Args: { p_issue_id: number };
+        Returns: undefined;
+      };
+      manager_reopen_issue: {
+        Args: { p_issue_id: number };
+        Returns: undefined;
+      };
       create_manager_site: {
-        Args: { p_name: string; p_address: string | null; p_timezone: string };
+        Args: { p_name: string; p_address: string | null; p_timezone: string; p_chain_name?: string | null };
         Returns: string;
+      };
+      manager_get_chain_sites: {
+        Args: { p_site_id: string };
+        Returns: { chain_name: string; sibling_site_id: string; sibling_name: string; sibling_address: string | null; sibling_manager_name: string | null }[];
       };
       request_manager_signup: {
         Args: { p_plan: 'trial' | 'pro' | 'business'; p_full_name: string | null };
         Returns: undefined;
       };
+      request_owner_signup: {
+        Args: { p_plan: 'trial' | 'pro' | 'business'; p_full_name: string | null };
+        Returns: undefined;
+      };
+      create_owner_chain: {
+        Args: { p_name: string };
+        Returns: string;
+      };
       complete_self_registration: {
-        Args: { p_role: 'coach' | 'client'; p_site_id: string; p_full_name: string | null };
+        Args: { p_role: 'coach' | 'client'; p_site_id: string; p_full_name: string | null; p_phone?: string | null };
         Returns: undefined;
       };
       list_signup_sites: {
@@ -243,6 +394,10 @@ export interface Database {
       get_support_email: {
         Args: Record<string, never>;
         Returns: string | null;
+      };
+      manager_roster_emails: {
+        Args: { p_site_id: string };
+        Returns: { user_id: string; email: string | null }[];
       };
       admin_set_site_status: {
         Args: { p_site_id: string; p_status: 'pending_approval' | 'active' | 'suspended' };
@@ -314,27 +469,161 @@ export interface Database {
       };
       get_week_real_bands: {
         Args: { p_site_id: string; p_week_start: string };
-        Returns: { date_key: string; hour: number; band: 'green' | 'amber' | 'red' }[];
+        Returns: { date_key: string; hour: number; band: 'green' | 'amber' | 'red'; pct: number }[];
       };
       get_weekly_stats: {
         Args: { p_site_id: string; p_weeks?: number };
-        Returns: { weekday: number; hour: number; band: 'green' | 'amber' | 'red'; samples: number }[];
+        Returns: { weekday: number; hour: number; band: 'green' | 'amber' | 'red'; samples: number; pct: number }[];
       };
       get_site_geofence: {
         Args: { p_site_id: string };
-        Returns: { lat: number; lng: number; radius: number }[];
+        Returns: { lat: number; lng: number; radius: number; proximity_radius: number }[];
       };
       manager_set_site_location: {
-        Args: { p_site_id: string; p_lat: number; p_lng: number; p_radius: number };
+        Args: { p_site_id: string; p_lat: number; p_lng: number; p_radius: number; p_user_agent?: string | null };
         Returns: undefined;
       };
       admin_set_site_location: {
-        Args: { p_site_id: string; p_lat: number; p_lng: number; p_radius: number };
+        Args: { p_site_id: string; p_lat: number; p_lng: number; p_radius: number; p_user_agent?: string | null };
         Returns: undefined;
+      };
+      admin_get_actions_log: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: number;
+          admin_name: string | null;
+          action_type: string;
+          entity_type: string;
+          entity_id: string;
+          entity_label: string | null;
+          detail: string | null;
+          created_at: string;
+        }[];
+      };
+      admin_get_gps_audit_log: {
+        Args: { p_site_id?: string | null; p_limit?: number };
+        Returns: {
+          id: number;
+          site_id: string;
+          site_name: string;
+          changed_by: string;
+          changed_by_name: string | null;
+          changed_at: string;
+          old_lat: number | null;
+          old_lng: number | null;
+          old_radius: number | null;
+          new_lat: number;
+          new_lng: number;
+          new_radius: number;
+          user_agent: string | null;
+        }[];
       };
       check_in: {
         Args: { p_site_id: string; p_lat: number; p_lng: number; p_mocked: boolean };
         Returns: number;
+      };
+      client_get_my_subscription: {
+        Args: Record<string, never>;
+        Returns: {
+          needsPlanChoice: boolean;
+          subscription: {
+            planType: 'monthly' | 'annual';
+            status: 'active' | 'grace' | 'blocked';
+            startDate: string;
+            expiryDate: string;
+            lastPaymentDate: string;
+            graceEndDate: string | null;
+            warningSentAt: string | null;
+          } | null;
+        };
+      };
+      client_choose_plan: {
+        Args: { p_plan: 'monthly' | 'annual' };
+        Returns: undefined;
+      };
+      client_confirm_payment_during_grace: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      client_switch_plan: {
+        Args: { p_plan: 'monthly' | 'annual' };
+        Returns: undefined;
+      };
+      manager_get_client_subscriptions: {
+        Args: Record<string, never>;
+        Returns: {
+          client_id: string;
+          full_name: string | null;
+          plan_type: 'monthly' | 'annual' | null;
+          status: 'active' | 'grace' | 'blocked' | null;
+          start_date: string | null;
+          expiry_date: string | null;
+          last_payment_date: string | null;
+        }[];
+      };
+      manager_assign_plan: {
+        Args: { p_client_id: string; p_plan: 'monthly' | 'annual' };
+        Returns: undefined;
+      };
+      is_owner: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      owner_chain_id: {
+        Args: Record<string, never>;
+        Returns: string | null;
+      };
+      owner_get_overview: {
+        Args: Record<string, never>;
+        Returns: { managers: number; clients: number; coaches: number; revenueEur: number; activity7d: { day: string; count: number }[] };
+      };
+      owner_get_managers: {
+        Args: Record<string, never>;
+        Returns: {
+          manager_id: string;
+          full_name: string | null;
+          email: string;
+          phone: string | null;
+          site_id: string;
+          site_name: string;
+          address: string | null;
+          address_verified: boolean;
+          client_count: number;
+          coach_count: number;
+          created_at: string;
+        }[];
+      };
+      owner_get_manager_detail: {
+        Args: { p_manager_id: string };
+        Returns: {
+          siteId: string;
+          siteName: string;
+          address: string | null;
+          plan: 'trial' | 'pro' | 'business';
+          lat: number | null;
+          lng: number | null;
+          radius: number;
+          clients: { id: string; fullName: string | null; membershipType: 'annual' | 'monthly' | null; paymentStatus: 'paid' | 'unpaid' | null }[];
+          coaches: { id: string; fullName: string | null }[];
+          paidCount: number;
+          unpaidCount: number;
+        };
+      };
+      owner_set_client_payment: {
+        Args: { p_client_id: string; p_type: 'annual' | 'monthly' | null; p_status: 'paid' | 'unpaid' | null };
+        Returns: undefined;
+      };
+      owner_create_manager_record: {
+        Args: { p_manager_user_id: string; p_full_name: string; p_site_name: string; p_address: string; p_lat?: number | null; p_lng?: number | null; p_phone?: string | null };
+        Returns: string;
+      };
+      owner_get_hq: {
+        Args: Record<string, never>;
+        Returns: { address: string | null; lat: number | null; lng: number | null };
+      };
+      owner_set_hq: {
+        Args: { p_address: string; p_lat?: number | null; p_lng?: number | null };
+        Returns: undefined;
       };
     };
   };

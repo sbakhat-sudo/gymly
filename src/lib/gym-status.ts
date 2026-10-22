@@ -12,6 +12,9 @@ export interface SiteStatus {
   openingHours: OpeningHours[];
   approvalStatus: 'pending_approval' | 'active' | 'suspended';
   capacityReference: number;
+  bandGreenPct: number;
+  bandAmberPct: number;
+  notifyOnThreshold: boolean;
 }
 
 /** "Open" requires both the manager's manual toggle AND the weekly schedule to allow it. Shared by
@@ -78,7 +81,7 @@ export function useLiveGymBand(site: SiteStatus | null, siteId: string | null, n
 export async function getSiteStatus(siteId: string): Promise<SiteStatus> {
   const { data, error } = await supabase
     .from('sites')
-    .select('name, timezone, manually_open, opening_hours, approval_status, capacity_reference')
+    .select('name, timezone, manually_open, opening_hours, approval_status, capacity_reference, band_green_pct, band_amber_pct, notify_manager_on_threshold')
     .eq('site_id', siteId)
     .single();
   if (error) throw error;
@@ -89,6 +92,9 @@ export async function getSiteStatus(siteId: string): Promise<SiteStatus> {
     openingHours: data.opening_hours as OpeningHours[],
     approvalStatus: data.approval_status,
     capacityReference: data.capacity_reference,
+    bandGreenPct: data.band_green_pct,
+    bandAmberPct: data.band_amber_pct,
+    notifyOnThreshold: data.notify_manager_on_threshold,
   };
 }
 
