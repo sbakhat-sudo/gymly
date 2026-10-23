@@ -10,6 +10,16 @@ export interface OwnerSubscriptionRow {
   revenueEur: number;
 }
 
+/** Payments recorded in one month for one kind of plan (see the subscription_payments history table). */
+export interface OwnerSubscriptionTrendPoint {
+  /** First day of the month, ISO date. */
+  monthStart: string;
+  kind: 'monthly' | 'annual';
+  tier: 'normal' | 'vip' | 'vvip';
+  subscribers: number;
+  revenueEur: number;
+}
+
 export interface OwnerOverview {
   managers: number;
   clients: number;
@@ -36,6 +46,14 @@ export async function getOwnerOverview(): Promise<OwnerOverview> {
     subscriptions: d.subscriptions ?? [],
     activity7d: d.activity7d,
   };
+}
+
+/** Month by month, how many subscriptions were paid or renewed on each of the six kinds of plan — always every
+ * month x six types, zeros included, oldest month first. */
+export async function getOwnerSubscriptionTrend(months = 6): Promise<OwnerSubscriptionTrendPoint[]> {
+  const { data, error } = await supabase.rpc('owner_get_subscription_trend', { p_months: months });
+  if (error) throw error;
+  return data.map((r) => ({ monthStart: r.month_start, kind: r.kind, tier: r.tier, subscribers: r.subscribers, revenueEur: r.revenue_eur }));
 }
 
 /** The Owner's own app-plan payment state — `grace` means the automatic 3-day window is running;

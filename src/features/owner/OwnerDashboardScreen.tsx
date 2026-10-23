@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Platform, Pressable, View, type ViewStyle } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
@@ -14,7 +14,7 @@ import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
-import { getOwnerOverview, getOwnerPlanBilling, type OwnerSubscriptionRow } from './owner-api';
+import { getOwnerOverview, getOwnerPlanBilling, getOwnerSubscriptionTrend, type OwnerSubscriptionRow, type OwnerSubscriptionTrendPoint } from './owner-api';
 
 type IconType = (p: { color: string; size: number }) => React.ReactElement;
 
@@ -84,10 +84,6 @@ function KpiCard({ index, icon, tint, label, value, onPress }: { index: number; 
     </Animated.View>
   );
 }
-
-const CHART_W = 320;
-const CHART_H = 110;
-const CHART_PAD = 10;
 
 const TIERS = ['normal', 'vip', 'vvip'] as const;
 const TIER_LABEL_KEY = { normal: 'owner.dashboard.tier.normal', vip: 'owner.dashboard.tier.vip', vvip: 'owner.dashboard.tier.vvip' } as const;
@@ -175,50 +171,111 @@ function SubscriptionDetailsModal({ visible, rows, total, onClose }: { visible: 
   );
 }
 
-/** Same hand-rolled SVG "stock chart" as Admin's TrendLineCard, adapted from 12 months to 7 days. */
-function ActivityTrendCard({ data }: { data: { day: string; count: number }[] }) {
+// Same palette the Manager's plan editor uses (Durata x Livello) — one plan, one colour, everywhere. The legend
+// and the numbers on the bars carry the meaning too, never the colour alone.
+const TREND_COLORS: Record<'monthly' | 'annual', Record<(typeof TIERS)[number], string>> = {
+  monthly: { normal: '#8B5CF6', vip: '#F97316', vvip: '#3B82F6' },
+  annual: { normal: '#EAB308', vip: '#EF4444', vvip: '#22C55E' },
+};
+const TREND_SERIES = (['monthly', 'annual'] as const).flatMap((kind) => TIERS.map((tier) => ({ kind, tier })));
+
+const TREND_W = 720;
+const TREND_H = 250;
+const TREND_TOP = 26;
+const TREND_BOTTOM = 52;
+
+/** Subscriptions per month: for each of the last months a group of six bars (Mensile/Annuale x Normale/VIP/VVIP,
+ * always in the same order), the number of subscriptions paid or renewed written above every bar, and the
+ * month's total underneath its name. Hand-rolled SVG like the other charts in this app. */
+function SubscriptionTrendCard({ points }: { points: OwnerSubscriptionTrendPoint[] }) {
   const { t, lang } = useI18n();
   const theme = useTheme();
-  if (data.length === 0) return null;
 
-  const values = data.map((d) => d.count);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const n = data.length;
-  const points = data.map((d, i) => {
-    const x = ((i + 0.5) / n) * CHART_W;
-    const y = CHART_PAD + (1 - (d.count - min) / range) * (CHART_H - 2 * CHART_PAD);
-    return { x, y };
-  });
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-  const areaPath = `${linePath} L${points[points.length - 1]?.x ?? 0},${CHART_H} L${points[0]?.x ?? 0},${CHART_H} Z`;
-  const tint = theme.primary;
+  const months = Array.from(new Set(points.map((p) => p.monthStart)));
+  const count = (month: string, kind: 'monthly' | 'annual', tier: (typeof TIERS)[number]): number =>
+    points.find((p) => p.monthStart === month && p.kind === kind && p.tier === tier)?.subscribers ?? 0;
+  const max = Math.max(1, ...points.map((p) => p.subscribers));
+  const grandTotal = points.reduce((sum, p) => sum + p.subscribers, 0);
+
+  const plotH = TREND_H - TREND_TOP - TREND_BOTTOM;
+  const groupW = TREND_W / Math.max(1, months.length);
+  const barW = Math.min(30, (groupW * 0.84) / TREND_SERIES.length);
+  const groupInner = barW * TREND_SERIES.length;
+  const monthLabel = (iso: string): string => {
+    const label = new Date(`${iso}T00:00:00`).toLocaleDateString(lang === 'it' ? 'it-IT' : 'en-GB', { month: 'short' });
+    return label.charAt(0).toUpperCase() + label.slice(1).replace('.', '');
+  };
+  const seriesLabel = (kind: 'monthly' | 'annual', tier: (typeof TIERS)[number]): string =>
+    `${t(kind === 'monthly' ? 'owner.dashboard.subscriptions.monthly' : 'owner.dashboard.subscriptions.annual')} · ${t(TIER_LABEL_KEY[tier])}`;
+
+  // The same chart as words, for screen readers.
+  const summary = months
+    .map((m) => {
+      const parts = TREND_SERIES.filter((s) => count(m, s.kind, s.tier) > 0).map((s) => `${seriesLabel(s.kind, s.tier)}: ${count(m, s.kind, s.tier)}`);
+      return `${monthLabel(m)}: ${parts.length > 0 ? parts.join(', ') : '0'}`;
+    })
+    .join('. ');
 
   return (
-    <View style={{ borderRadius: radius.card, padding: spacing.lg, gap: spacing.sm, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        <IconBadge icon={PulseIcon} tint={tint} size={26} />
-        <AppText style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>{t('owner.dashboard.activity.title')}</AppText>
+    <View style={{ borderRadius: radius.card, padding: spacing.lg, gap: spacing.md, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <IconBadge icon={PulseIcon} tint={theme.primary} />
+        <View style={{ flexShrink: 1, gap: 1 }}>
+          <AppText style={{ fontWeight: '700', fontSize: 16 }}>{t('owner.dashboard.trend.title')}</AppText>
+          <AppText variant="caption" muted>
+            {t('owner.dashboard.trend.hint')}
+          </AppText>
+        </View>
       </View>
 
-      <Svg width="100%" height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`} preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id="ownerActivityFill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={tint} stopOpacity={0.35} />
-            <Stop offset="100%" stopColor={tint} stopOpacity={0} />
-          </LinearGradient>
-        </Defs>
-        <Path d={areaPath} fill="url(#ownerActivityFill)" stroke="none" />
-        <Path d={linePath} fill="none" stroke={tint} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-      </Svg>
-
-      <View style={{ flexDirection: 'row' }}>
-        {data.map((d) => (
-          <AppText key={d.day} variant="caption" muted style={{ flex: 1, textAlign: 'center', fontSize: 10, textTransform: 'capitalize' }}>
-            {new Date(`${d.day}T00:00:00`).toLocaleDateString(lang, { weekday: 'short' })}
-          </AppText>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+        {TREND_SERIES.map((s) => (
+          <View key={`${s.kind}-${s.tier}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: TREND_COLORS[s.kind][s.tier] }} />
+            <AppText variant="caption" style={{ fontWeight: '600' }}>
+              {seriesLabel(s.kind, s.tier)}
+            </AppText>
+          </View>
         ))}
+      </View>
+
+      {grandTotal === 0 ? (
+        <AppText muted style={{ fontSize: 13 }}>
+          {t('owner.dashboard.trend.empty')}
+        </AppText>
+      ) : null}
+
+      <View accessible accessibilityRole="image" accessibilityLabel={summary}>
+        <Svg width="100%" viewBox={`0 0 ${TREND_W} ${TREND_H}`} style={{ aspectRatio: TREND_W / TREND_H }}>
+          <Line x1={0} y1={TREND_TOP + plotH} x2={TREND_W} y2={TREND_TOP + plotH} stroke={theme.glassBorder} strokeWidth={1} />
+          {months.map((m, mi) => {
+            const gx = mi * groupW + (groupW - groupInner) / 2;
+            const monthTotal = TREND_SERIES.reduce((sum, s) => sum + count(m, s.kind, s.tier), 0);
+            return (
+              <React.Fragment key={m}>
+                {TREND_SERIES.map((s, si) => {
+                  const v = count(m, s.kind, s.tier);
+                  const h = (v / max) * plotH;
+                  const x = gx + si * barW;
+                  return (
+                    <React.Fragment key={`${s.kind}-${s.tier}`}>
+                      {v > 0 ? <Rect x={x + 1} y={TREND_TOP + plotH - h} width={Math.max(2, barW - 2)} height={h} rx={3} fill={TREND_COLORS[s.kind][s.tier]} /> : null}
+                      <SvgText x={x + barW / 2} y={TREND_TOP + plotH - h - 6} fontSize={12} fontWeight={v > 0 ? '700' : '400'} textAnchor="middle" fill={v > 0 ? theme.text : theme.textMuted}>
+                        {v}
+                      </SvgText>
+                    </React.Fragment>
+                  );
+                })}
+                <SvgText x={mi * groupW + groupW / 2} y={TREND_TOP + plotH + 20} fontSize={14} fontWeight="700" textAnchor="middle" fill={theme.text}>
+                  {monthLabel(m)}
+                </SvgText>
+                <SvgText x={mi * groupW + groupW / 2} y={TREND_TOP + plotH + 38} fontSize={12} textAnchor="middle" fill={theme.textMuted}>
+                  {t('owner.dashboard.trend.total', { count: monthTotal })}
+                </SvgText>
+              </React.Fragment>
+            );
+          })}
+        </Svg>
       </View>
     </View>
   );
@@ -230,6 +287,7 @@ export function OwnerDashboardScreen() {
   const isSidebar = useSidebarMode();
   const overview = useAsync(() => getOwnerOverview(), []);
   const billing = useAsync(() => getOwnerPlanBilling(), []);
+  const trend = useAsync(() => getOwnerSubscriptionTrend(6), []);
   const [detailsOpen, setDetailsOpen] = useState(false);
   usePageHeader(PulseIcon, t('owner.dashboard.title'));
 
@@ -273,7 +331,7 @@ export function OwnerDashboardScreen() {
               <KpiCard index={2} icon={UsersIcon} tint={theme.band.amber.solid} label={t('owner.dashboard.coaches')} value={String(overview.data.coaches)} />
               <KpiCard index={3} icon={CreditCardIcon} tint={theme.primaryDeep} label={t('owner.dashboard.revenue')} value={revenueLabel} onPress={() => setDetailsOpen(true)} />
             </View>
-            <ActivityTrendCard data={overview.data.activity7d} />
+            {trend.data ? <SubscriptionTrendCard points={trend.data} /> : null}
           </View>
         </FadeSlideIn>
       ) : null}

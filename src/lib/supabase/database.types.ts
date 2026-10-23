@@ -494,6 +494,10 @@ export interface Database {
         Args: { p_other_id: string };
         Returns: string;
       };
+      owner_get_subscription_trend: {
+        Args: { p_months?: number };
+        Returns: { month_start: string; kind: 'monthly' | 'annual'; tier: 'normal' | 'vip' | 'vvip'; subscribers: number; revenue_eur: number }[];
+      };
       chat_get_my_owner: {
         Args: Record<string, never>;
         Returns: { owner_id: string; owner_name: string | null }[];
