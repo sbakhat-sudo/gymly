@@ -14,7 +14,7 @@ import { fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
-import { getOwnerOverview } from './owner-api';
+import { getOwnerOverview, getOwnerPlanBilling } from './owner-api';
 
 type IconType = (p: { color: string; size: number }) => React.ReactElement;
 
@@ -127,11 +127,18 @@ function ActivityTrendCard({ data }: { data: { day: string; count: number }[] })
 }
 
 export function OwnerDashboardScreen() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const theme = useTheme();
   const isSidebar = useSidebarMode();
   const overview = useAsync(() => getOwnerOverview(), []);
+  const billing = useAsync(() => getOwnerPlanBilling(), []);
   usePageHeader(PulseIcon, t('owner.dashboard.title'));
+
+  // Only while the automatic 3-day window is running: the server flips `warningSent` once the last 24h
+  // begin, which is what turns this from a heads-up into the "pay now or we deactivate you" notice.
+  // Plain text on a Banner (icon + words), never colour alone.
+  const graceEnd = billing.data?.status === 'grace' && billing.data.graceEnd ? new Date(billing.data.graceEnd) : null;
+  const graceEndLabel = graceEnd ? graceEnd.toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
   const revenueLabel = overview.data ? `€${overview.data.revenueEur.toLocaleString('it-IT')}` : '—';
 
@@ -147,6 +154,13 @@ export function OwnerDashboardScreen() {
             {t('owner.dashboard.subtitle')}
           </AppText>
         </View>
+      ) : null}
+
+      {graceEnd ? (
+        <Banner
+          title={t(billing.data?.warningSent ? 'owner.billing.lastDay.title' : 'owner.billing.grace.title')}
+          message={t(billing.data?.warningSent ? 'owner.billing.lastDay.body' : 'owner.billing.grace.body', { date: graceEndLabel })}
+        />
       ) : null}
 
       {overview.error ? <Banner title={t('owner.dashboard.error')} /> : null}

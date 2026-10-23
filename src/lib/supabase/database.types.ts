@@ -189,7 +189,18 @@ export interface Database {
         Relationships: [];
       };
       gym_chains: {
-        Row: { id: string; name: string; owner_id: string | null; hq_address: string | null; plan: 'trial' | 'pro' | 'business'; created_at: string };
+        Row: {
+          id: string;
+          name: string;
+          owner_id: string | null;
+          hq_address: string | null;
+          plan: 'trial' | 'pro' | 'business';
+          created_at: string;
+          plan_paid_until: string | null;
+          plan_status: 'active' | 'grace' | 'deactivated';
+          plan_grace_end: string | null;
+          plan_warning_sent_at: string | null;
+        };
         Insert: never; // only via create_manager_site()/admin_set_profile_status()
         Update: never;
         Relationships: [];
@@ -465,6 +476,23 @@ export interface Database {
           status: 'pending' | 'active' | 'rejected';
           managers_count: number;
           created_at: string;
+          plan_status: 'active' | 'grace' | 'deactivated' | null;
+          plan_paid_until: string | null;
+          plan_grace_end: string | null;
+        }[];
+      };
+      admin_mark_owner_paid: {
+        Args: { p_owner_id: string; p_months?: number };
+        Returns: undefined;
+      };
+      owner_get_plan_billing: {
+        Args: Record<string, never>;
+        Returns: {
+          plan: 'trial' | 'pro' | 'business';
+          plan_status: 'active' | 'grace' | 'deactivated';
+          plan_paid_until: string | null;
+          plan_grace_end: string | null;
+          plan_warning_sent_at: string | null;
         }[];
       };
       admin_set_profile_name: {

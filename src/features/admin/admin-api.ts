@@ -201,19 +201,29 @@ export async function getPendingOwners(): Promise<PendingManager[]> {
   return data.map((m) => ({ userId: m.id, fullName: m.full_name, requestedPlan: m.requested_plan, createdAt: m.created_at }));
 }
 
+/** `active` = plan paid, `grace` = unpaid with the automatic 3-day window running, `deactivated` = the
+ * window ran out and the Owner was switched off by the hourly job (see `owner_plans_lifecycle()`). */
+export type OwnerPlanStatus = 'active' | 'grace' | 'deactivated';
+
 export interface AdminOwnerRow {
   ownerId: string;
   fullName: string | null;
   email: string;
   chainName: string | null;
   plan: SitePlan | null;
+  /** Profile status: `rejected` here means switched off — by Admin by hand, or by the billing job
+   * (then `planStatus` is `deactivated` too). */
+  status: 'pending' | 'active' | 'rejected';
   managersCount: number;
   createdAt: string;
+  planStatus: OwnerPlanStatus | null;
+  planPaidUntil: string | null;
+  planGraceEnd: string | null;
 }
 
-/** The roster of already-approved Owners (never pending ones — those are `getPendingOwners()`'s own
- * queue) — how many Managers each one's chain actually has, the thing Admin had no visibility into
- * before. */
+/** The roster of approved Owners (never pending ones — those are `getPendingOwners()`'s own queue,
+ * though an Owner the billing job deactivated stays listed so Admin can record their payment) — how
+ * many Managers each one's chain actually has, and whether their plan is paid. */
 export async function getOwners(): Promise<AdminOwnerRow[]> {
   const { data, error } = await supabase.rpc('admin_get_owners');
   if (error) throw error;
@@ -223,9 +233,20 @@ export async function getOwners(): Promise<AdminOwnerRow[]> {
     email: o.email,
     chainName: o.chain_name,
     plan: o.plan,
+    status: o.status,
     managersCount: o.managers_count,
     createdAt: o.created_at,
+    planStatus: o.plan_status,
+    planPaidUntil: o.plan_paid_until,
+    planGraceEnd: o.plan_grace_end,
   }));
+}
+
+/** Records an Owner's plan payment (one month by default). Also brings back an Owner the billing job
+ * had deactivated. */
+export async function markOwnerPaid(ownerId: string, months = 1): Promise<void> {
+  const { error } = await supabase.rpc('admin_mark_owner_paid', { p_owner_id: ownerId, p_months: months });
+  if (error) throw error;
 }
 
 // ── Dashboard growth chart ──────────────────────────────────────────────

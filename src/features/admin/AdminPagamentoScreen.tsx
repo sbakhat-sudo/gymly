@@ -23,7 +23,7 @@ const MOCK_HISTORY = [
 
 const PLAN_TIERS: { id: SitePlan; name: string; price: string; features: string[] }[] = [
   { id: 'trial', name: 'Trial', price: 'Gratis', features: ['14 giorni di prova', '1 palestra'] },
-  { id: 'pro', name: 'Pro', price: '€49/mese', features: ['Palestre illimitate', 'Report avanzati', 'Comunicazioni broadcast'] },
+  { id: 'pro', name: 'Pro', price: '€49/mese', features: ['Palestre illimitate', 'Report avanzati'] },
   { id: 'business', name: 'Business', price: '€129/mese', features: ['Tutto di Pro', 'Supporto dedicato', 'SLA garantito'] },
 ];
 const CURRENT_PLAN_ID: SitePlan = 'pro';

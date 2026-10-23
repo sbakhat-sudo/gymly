@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router/js-tabs';
 
-import { DumbbellIcon, LayersIcon, PulseIcon, SlidersIcon, UsersIcon } from '@/components/icons';
+import { LayersIcon, PulseIcon, SlidersIcon, UsersIcon } from '@/components/icons';
 import { PillTabBar } from '@/components/PillTabBar';
 import { RoleTopBar } from '@/components/RoleTopBar';
 import { useI18n } from '@/lib/i18n';
@@ -30,11 +30,11 @@ export default function AdminLayout() {
               }}
             />
             <Tabs.Screen
-              name="palestre"
+              name="owners"
               options={{
-                title: t('tab.admin.sites'),
-                tabBarAccessibilityLabel: t('tab.admin.sites'),
-                tabBarIcon: ({ color, size }) => <DumbbellIcon color={color} size={size} />,
+                title: t('tab.admin.owners'),
+                tabBarAccessibilityLabel: t('tab.admin.owners'),
+                tabBarIcon: ({ color, size }) => <LayersIcon color={color} size={size} />,
               }}
             />
             <Tabs.Screen
@@ -43,14 +43,6 @@ export default function AdminLayout() {
                 title: t('tab.admin.managers'),
                 tabBarAccessibilityLabel: t('tab.admin.managers'),
                 tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />,
-              }}
-            />
-            <Tabs.Screen
-              name="owners"
-              options={{
-                title: t('tab.admin.owners'),
-                tabBarAccessibilityLabel: t('tab.admin.owners'),
-                tabBarIcon: ({ color, size }) => <LayersIcon color={color} size={size} />,
               }}
             />
             <Tabs.Screen

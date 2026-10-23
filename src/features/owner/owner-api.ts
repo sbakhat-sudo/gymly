@@ -17,6 +17,30 @@ export async function getOwnerOverview(): Promise<OwnerOverview> {
   return { managers: d.managers, clients: d.clients, coaches: d.coaches, revenueEur: d.revenueEur, activity7d: d.activity7d };
 }
 
+/** The Owner's own app-plan payment state — `grace` means the automatic 3-day window is running;
+ * `warningSent` flips once the last 24 hours before automatic deactivation begin. */
+export interface OwnerPlanBilling {
+  plan: 'trial' | 'pro' | 'business';
+  status: 'active' | 'grace' | 'deactivated';
+  paidUntil: string | null;
+  graceEnd: string | null;
+  warningSent: boolean;
+}
+
+export async function getOwnerPlanBilling(): Promise<OwnerPlanBilling | null> {
+  const { data, error } = await supabase.rpc('owner_get_plan_billing');
+  if (error) throw error;
+  const row = data[0];
+  if (!row) return null;
+  return {
+    plan: row.plan,
+    status: row.plan_status,
+    paidUntil: row.plan_paid_until,
+    graceEnd: row.plan_grace_end,
+    warningSent: row.plan_warning_sent_at !== null,
+  };
+}
+
 export interface OwnerManagerRow {
   managerId: string;
   fullName: string | null;

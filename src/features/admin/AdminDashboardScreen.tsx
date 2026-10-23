@@ -7,7 +7,7 @@ import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { FadeSlideIn } from '@/components/FadeSlideIn';
 import { GroupHeader } from '@/components/GroupHeader';
-import { CheckIcon, ChevronDownIcon, ClockIcon, CreditCardIcon, DumbbellIcon, InboxIcon, PulseIcon, UsersIcon, XIcon } from '@/components/icons';
+import { CheckIcon, ChevronDownIcon, ClockIcon, CreditCardIcon, InboxIcon, LayersIcon, PulseIcon, UsersIcon, XIcon } from '@/components/icons';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Screen } from '@/components/Screen';
 import { decorativeA11yProps } from '@/lib/a11y';
@@ -23,6 +23,7 @@ import { AdminActionRow } from './AdminActionRow';
 import {
   getActionsLog,
   getOverview,
+  getOwners,
   getPendingOwners,
   getSites,
   getSitesGrowth,
@@ -73,6 +74,7 @@ export function AdminDashboardScreen() {
   const router = useRouter();
   const overview = useAsync(() => getOverview(), []);
   const sites = useAsync(() => getSites(), []);
+  const owners = useAsync(() => getOwners(), []);
   const pendingOwners = useAsync(() => getPendingOwners(), []);
   const growth = useAsync(() => getSitesGrowth(12), []);
   const actionsLog = useAsync(() => getActionsLog(12), []);
@@ -86,6 +88,7 @@ export function AdminDashboardScreen() {
   function reloadAll(): void {
     overview.reload();
     sites.reload();
+    owners.reload();
     pendingOwners.reload();
   }
 
@@ -131,59 +134,59 @@ export function AdminDashboardScreen() {
         </FadeSlideIn>
       ) : null}
 
-      {overview.data ? (
+      {overview.data && owners.data ? (
         <>
-          <GroupHeader icon={DumbbellIcon} label={t('admin.dashboard.group.status')} />
+          <GroupHeader icon={LayersIcon} label={t('admin.dashboard.group.status')} />
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <KpiCard
               index={0}
-              icon={DumbbellIcon}
+              icon={LayersIcon}
               tint={theme.primary}
-              label={t('admin.dashboard.sitesTotal')}
-              value={overview.data.sitesActive + overview.data.sitesSuspended + overview.data.sitesPending}
-              onPress={() => router.push('/(admin)/palestre')}
+              label={t('admin.dashboard.ownersTotal')}
+              value={owners.data.length}
+              onPress={() => router.push('/(admin)/owners')}
             />
             <KpiCard
               index={1}
               icon={CheckIcon}
               tint={theme.band.green.solid}
-              label={t('admin.overview.sitesActive')}
-              value={overview.data.sitesActive}
-              onPress={() => router.push('/(admin)/palestre')}
+              label={t('admin.dashboard.ownersActive')}
+              value={owners.data.filter((o) => o.status === 'active' && o.planStatus !== 'grace').length}
+              onPress={() => router.push('/(admin)/owners')}
             />
             <KpiCard
               index={2}
-              icon={XIcon}
-              tint={theme.danger}
-              label={t('admin.sites.status.suspended')}
-              value={overview.data.sitesSuspended}
-              onPress={() => router.push('/(admin)/palestre')}
+              icon={ClockIcon}
+              tint={theme.band.amber.solid}
+              label={t('admin.dashboard.ownersGrace')}
+              value={owners.data.filter((o) => o.planStatus === 'grace').length}
+              onPress={() => router.push('/(admin)/owners')}
             />
           </View>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <KpiCard
               index={3}
+              icon={XIcon}
+              tint={theme.danger}
+              label={t('admin.dashboard.ownersDeactivated')}
+              value={owners.data.filter((o) => o.status === 'rejected').length}
+              onPress={() => router.push('/(admin)/owners')}
+            />
+            <KpiCard
+              index={4}
               icon={UsersIcon}
               tint={theme.primary}
               label={t('admin.overview.managersTotal')}
               value={overview.data.managersTotal}
-              onPress={() => router.push('/(admin)/manager')}
+              onPress={() => router.push('/(admin)/owners')}
             />
             <KpiCard
-              index={4}
+              index={5}
               icon={CheckIcon}
               tint={theme.band.green.solid}
               label={t('admin.overview.managersActive')}
               value={overview.data.managersActive}
-              onPress={() => router.push('/(admin)/manager')}
-            />
-            <KpiCard
-              index={5}
-              icon={XIcon}
-              tint={theme.textMuted}
-              label={t('admin.overview.managersInactive')}
-              value={overview.data.managersTotal - overview.data.managersActive}
-              onPress={() => router.push('/(admin)/manager')}
+              onPress={() => router.push('/(admin)/owners')}
             />
           </View>
         </>
@@ -195,7 +198,7 @@ export function AdminDashboardScreen() {
         {sites.data ? (
           <View style={{ flex: 1, minWidth: 280 }}>
             <FadeSlideIn delay={140}>
-              <PlanPieChart sites={sites.data} onPress={() => router.push('/(admin)/palestre')} />
+              <PlanPieChart sites={sites.data} onPress={() => router.push('/(admin)/owners')} />
             </FadeSlideIn>
           </View>
         ) : null}
@@ -203,7 +206,7 @@ export function AdminDashboardScreen() {
         {growth.data ? (
           <View style={{ flex: 1, minWidth: 280 }}>
             <FadeSlideIn delay={210}>
-              <TrendLineCard title={t('admin.dashboard.growth.title')} tint={theme.primary} data={growth.data} onPress={() => router.push('/(admin)/palestre')} />
+              <TrendLineCard title={t('admin.dashboard.growth.title')} tint={theme.primary} data={growth.data} onPress={() => router.push('/(admin)/owners')} />
             </FadeSlideIn>
           </View>
         ) : null}
