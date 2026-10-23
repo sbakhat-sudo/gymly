@@ -141,7 +141,7 @@ export default function LoginScreen() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
-            autoComplete="password"
+            autoComplete="current-password"
             textContentType="password"
             returnKeyType="done"
             onSubmitEditing={() => void submit()}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 
 import { useAuth } from '@/lib/auth/auth-context';
+import { isPlausibleName } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase/client';
 import { spacing, useTheme } from '@/lib/theme';
@@ -31,7 +32,7 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
   const [lastName, setLastName] = useState(profile?.lastName ?? '');
   const [birthYear, setBirthYear] = useState(profile?.birthYear ? String(profile.birthYear) : '');
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState<'success' | 'error' | 'invalidYear' | null>(null);
+  const [feedback, setFeedback] = useState<'success' | 'error' | 'invalidYear' | 'invalidName' | null>(null);
 
   if (!profile || (auth.status !== 'active' && auth.status !== 'admin' && auth.status !== 'owner')) return null;
   const userId = auth.session.user.id;
@@ -43,6 +44,13 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
 
   async function submit(): Promise<void> {
     setFeedback(null);
+
+    // A browser's saved-credentials autofill can drop an email address into a name field — refuse it here
+    // instead of saving it as the person's name.
+    if ((firstName.trim() && !isPlausibleName(firstName)) || (lastName.trim() && !isPlausibleName(lastName))) {
+      setFeedback('invalidName');
+      return;
+    }
 
     let parsedYear: number | null = null;
     if (includeBirthYear && birthYear.trim().length > 0) {
@@ -99,7 +107,7 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
               placeholder={t('profile.firstName')}
               placeholderTextColor={theme.textMuted}
               accessibilityLabel={t('profile.firstName')}
-              autoComplete="off"
+              autoComplete="given-name"
               textContentType="givenName"
               style={input}
             />
@@ -117,7 +125,7 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
               placeholder={t('profile.lastName')}
               placeholderTextColor={theme.textMuted}
               accessibilityLabel={t('profile.lastName')}
-              autoComplete="off"
+              autoComplete="family-name"
               textContentType="familyName"
               style={input}
             />
@@ -148,7 +156,7 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
         {feedback ? (
           <View accessibilityLiveRegion="polite">
             <AppText color={feedback === 'success' ? theme.text : theme.danger} style={{ fontWeight: '600', fontSize: 13 }}>
-              {t(feedback === 'success' ? 'profile.success' : feedback === 'invalidYear' ? 'profile.birthYear.invalid' : 'profile.error')}
+              {t(feedback === 'success' ? 'profile.success' : feedback === 'invalidYear' ? 'profile.birthYear.invalid' : feedback === 'invalidName' ? 'profile.name.invalid' : 'profile.error')}
             </AppText>
           </View>
         ) : null}

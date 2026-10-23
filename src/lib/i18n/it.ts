@@ -391,6 +391,8 @@ export const it = {
   'auth.signup.loginLink': 'Accedi',
   'auth.signup.error': 'Non è stato possibile completare la registrazione. Riprova.',
   'auth.signup.error.weakPassword': 'La password deve avere almeno 6 caratteri.',
+  'auth.signup.error.invalidName': 'Il nome può contenere solo lettere: controlla di non aver scritto l’email.',
+  'auth.signup.error.invalidPhone': 'Il numero di telefono non sembra valido: usa solo cifre (es. 333 1234567).',
   'auth.signup.error.passwordMismatch': 'Le password non coincidono.',
   'auth.signup.error.emailTaken': 'Questa email è già registrata.',
   'auth.signup.error.missingSite': 'Scegli una palestra prima di continuare.',
@@ -496,6 +498,7 @@ export const it = {
   'profileSetup.password.sameAsOld': 'Scegli una password diversa da quella che ti è stata data.',
   'profileSetup.password.mismatch': 'Le due password non coincidono.',
   'profileSetup.field.required': 'Campo obbligatorio.',
+  'profileSetup.name.invalid': 'Solo lettere, per favore: non l’email.',
   'profileSetup.submit': 'Completa il profilo',
   'profileSetup.saving': 'Salvataggio…',
   'profileSetup.error': 'Non siamo riusciti a salvare il profilo. Riprova.',
@@ -514,6 +517,7 @@ export const it = {
   'profile.save': 'Salva profilo',
   'profile.success': 'Profilo aggiornato.',
   'profile.error': 'Non è stato possibile salvare il profilo.',
+  'profile.name.invalid': 'Nome e cognome possono contenere solo lettere: controlla di non aver scritto l’email.',
   'profile.birthYear.invalid': 'Inserisci un anno valido (es. 1990).',
 
   // ── Web-only (Manager/Coach non disponibili sull’app mobile) ──

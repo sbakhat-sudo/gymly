@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth/auth-context';
 import { useReduceMotion } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { storage } from '@/lib/storage';
+import { isPlausibleName, isPlausiblePhone } from '@/lib/domain/input-checks';
 import { supabase } from '@/lib/supabase/client';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { ManagerBadge, PlanCard, PLAN_NAME_KEY, PLAN_ORDER, type ManagerPlan } from './ManagerPlanCards';
@@ -42,6 +43,14 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
 
   async function submit(): Promise<void> {
     if (!plan) return;
+    if (fullName.trim() && !isPlausibleName(fullName)) {
+      setError(t('auth.signup.error.invalidName'));
+      return;
+    }
+    if (phone.trim() && !isPlausiblePhone(phone)) {
+      setError(t('auth.signup.error.invalidPhone'));
+      return;
+    }
     if (password.trim().length < 6) {
       setError(t('auth.signup.error.weakPassword'));
       return;
@@ -173,7 +182,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
                 accessibilityLabel={t('auth.signup.password')}
                 secureTextEntry
                 autoCapitalize="none"
-                autoComplete="password-new"
+                autoComplete="new-password"
                 textContentType="newPassword"
                 danger={error !== null}
               />
@@ -184,7 +193,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
                 accessibilityLabel={t('auth.signup.confirmPassword')}
                 secureTextEntry
                 autoCapitalize="none"
-                autoComplete="password-new"
+                autoComplete="new-password"
                 textContentType="newPassword"
                 returnKeyType="done"
                 onSubmitEditing={() => void submit()}
@@ -231,7 +240,7 @@ function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   autoCorrect?: boolean;
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
-  autoComplete?: 'email' | 'name' | 'password-new' | 'tel';
+  autoComplete?: 'email' | 'name' | 'new-password' | 'tel';
   textContentType?: 'emailAddress' | 'name' | 'newPassword' | 'telephoneNumber';
   returnKeyType?: 'done';
   onSubmitEditing?: () => void;

@@ -10,6 +10,7 @@ import { PlusIcon } from '@/components/icons';
 import { getOwnerChainName } from '@/features/owner/owner-api';
 import { useAuth } from '@/lib/auth/auth-context';
 import { formatBirthInput, parseBirthDate } from '@/lib/domain/birth-date';
+import { isPlausibleName } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
 import { uploadAvatar } from '@/lib/supabase/avatar';
 import { supabase } from '@/lib/supabase/client';
@@ -90,8 +91,8 @@ function CompleteProfileModal() {
   const totalSteps = BASE_STEPS + (isOwner ? 1 : 0);
 
   const hasPhoto = Boolean(profile?.avatarUrl);
-  const firstOk = firstName.trim().length > 0;
-  const lastOk = lastName.trim().length > 0;
+  const firstOk = isPlausibleName(firstName);
+  const lastOk = isPlausibleName(lastName);
   const birthIso = parseBirthDate(birth);
   const addressOk = address.trim().length >= 5;
   const passwordOk = password.length >= MIN_PASSWORD;
@@ -238,12 +239,12 @@ function CompleteProfileModal() {
 
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
-                <Field label={t('profileSetup.firstName')} error={submitted && !firstOk ? t('profileSetup.field.required') : null}>
+                <Field label={t('profileSetup.firstName')} error={submitted && !firstOk ? t(firstName.trim() ? 'profileSetup.name.invalid' : 'profileSetup.field.required') : null}>
                   <TextInput value={firstName} onChangeText={setFirstName} autoComplete="given-name" textContentType="givenName" accessibilityLabel={t('profileSetup.firstName')} maxLength={80} style={inputStyle} />
                 </Field>
               </View>
               <View style={{ flex: 1 }}>
-                <Field label={t('profileSetup.lastName')} error={submitted && !lastOk ? t('profileSetup.field.required') : null}>
+                <Field label={t('profileSetup.lastName')} error={submitted && !lastOk ? t(lastName.trim() ? 'profileSetup.name.invalid' : 'profileSetup.field.required') : null}>
                   <TextInput value={lastName} onChangeText={setLastName} autoComplete="family-name" textContentType="familyName" accessibilityLabel={t('profileSetup.lastName')} maxLength={80} style={inputStyle} />
                 </Field>
               </View>

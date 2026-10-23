@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Platform, TextInput, View } from 'react-native';
 
 import { useAuth } from '@/lib/auth/auth-context';
 import { useI18n } from '@/lib/i18n';
@@ -27,6 +27,7 @@ export function AccountSection() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<'success' | 'error' | 'tooShort' | 'sameAsOld' | null>(null);
+  const email = auth.status !== 'loading' && auth.status !== 'signedOut' ? auth.session.user.email : undefined;
 
   async function updatePassword(): Promise<void> {
     if (password.trim().length < 6) {
@@ -57,6 +58,11 @@ export function AccountSection() {
           <AppText variant="caption" style={{ fontWeight: '700' }}>
             {t('account.password.title')}
           </AppText>
+          {/* The account's email as the form's (invisible) username, so the browser pairs a saved password with it —
+              and does not go looking for a username among the visible fields. Web only; never reachable by keyboard. */}
+          {Platform.OS === 'web' && email ? (
+            <TextInput value={email} editable={false} focusable={false} autoComplete="username" style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+          ) : null}
           <TextInput
             value={password}
             onChangeText={(v) => {
@@ -69,7 +75,7 @@ export function AccountSection() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
-            autoComplete="password-new"
+            autoComplete="new-password"
             returnKeyType="done"
             onSubmitEditing={() => void updatePassword()}
             style={settingsInputStyle(theme, invalid)}

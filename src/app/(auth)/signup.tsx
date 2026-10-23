@@ -187,7 +187,7 @@ function ClientOrCoachSignupScreen({ initialRole }: { initialRole: Role }) {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
-            autoComplete="password-new"
+            autoComplete="new-password"
             textContentType="newPassword"
             returnKeyType="done"
             onSubmitEditing={() => void submit()}

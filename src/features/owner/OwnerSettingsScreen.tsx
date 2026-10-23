@@ -120,8 +120,6 @@ function HqLocationCard() {
   const hq = useAsync(() => getOwnerHq(), []);
   const [editing, setEditing] = useState(false);
   const [address, setAddress] = useState('');
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
 
@@ -129,8 +127,6 @@ function HqLocationCard() {
   // effect) — avoids syncing local draft state to server state on every reload.
   function startEditing(): void {
     setAddress(hq.data?.address ?? '');
-    setLat(hq.data?.lat !== null && hq.data?.lat !== undefined ? String(hq.data.lat) : '');
-    setLng(hq.data?.lng !== null && hq.data?.lng !== undefined ? String(hq.data.lng) : '');
     setEditing(true);
   }
 
@@ -138,10 +134,8 @@ function HqLocationCard() {
     setSaving(true);
     setError(false);
     try {
-      const latNum = Number(lat);
-      const lngNum = Number(lng);
-      const hasCoords = lat.trim().length > 0 && lng.trim().length > 0 && Number.isFinite(latNum) && Number.isFinite(lngNum);
-      await setOwnerHq(address, hasCoords ? latNum : undefined, hasCoords ? lngNum : undefined);
+      // Street and city only: the pin on the map is worked out from the address, never typed in by hand.
+      await setOwnerHq(address);
       await hq.reload();
       setEditing(false);
     } catch (e) {
@@ -178,18 +172,10 @@ function HqLocationCard() {
       ) : (
         <View style={{ gap: spacing.sm }}>
           <TextInput value={address} onChangeText={setAddress} placeholder={t('owner.settings.hq.addressPlaceholder')} placeholderTextColor={theme.textMuted} style={inputStyle} />
-          <AddressMapPreview addressQuery={address.trim() || null} lat={lat} lng={lng} height={140} />
-          <AppText accessibilityRole="link" onPress={() => openExternalUrl(googleMapsUrl(lat, lng, address.trim() || null))} style={{ color: theme.primary, fontWeight: '600', fontSize: 13 }}>
+          <AddressMapPreview addressQuery={address.trim() || null} lat="" lng="" height={140} />
+          <AppText accessibilityRole="link" onPress={() => openExternalUrl(googleMapsUrl('', '', address.trim() || null))} style={{ color: theme.primary, fontWeight: '600', fontSize: 13 }}>
             {t('manager.gym.location.openMaps')}
           </AppText>
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-            <View style={{ flex: 1 }}>
-              <TextInput value={lat} onChangeText={setLat} placeholder={t('manager.gym.location.lat')} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" style={inputStyle} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <TextInput value={lng} onChangeText={setLng} placeholder={t('manager.gym.location.lng')} placeholderTextColor={theme.textMuted} keyboardType="decimal-pad" style={inputStyle} />
-            </View>
-          </View>
           {error ? <Banner title={t('owner.settings.hq.error')} /> : null}
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <Button label={t('common.close')} variant="secondary" onPress={() => setEditing(false)} />

@@ -161,7 +161,7 @@ export function ManagerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan
                 accessibilityLabel={t('auth.signup.password')}
                 secureTextEntry
                 autoCapitalize="none"
-                autoComplete="password-new"
+                autoComplete="new-password"
                 textContentType="newPassword"
                 returnKeyType="done"
                 onSubmitEditing={() => void submit()}
@@ -208,7 +208,7 @@ function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   autoCorrect?: boolean;
   keyboardType?: 'default' | 'email-address';
-  autoComplete?: 'email' | 'name' | 'password-new';
+  autoComplete?: 'email' | 'name' | 'new-password';
   textContentType?: 'emailAddress' | 'name' | 'newPassword';
   returnKeyType?: 'done';
   onSubmitEditing?: () => void;
