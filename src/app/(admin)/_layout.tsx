@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { LayersIcon, PulseIcon, SlidersIcon, UsersIcon } from '@/components/icons';
 import { PillTabBar } from '@/components/PillTabBar';
 import { RoleTopBar } from '@/components/RoleTopBar';
+import { AdminNotifications } from '@/features/admin/AdminNotifications';
 import { useI18n } from '@/lib/i18n';
 import { PageHeaderProvider } from '@/lib/page-header-context';
 import { SelectedDateProvider } from '@/lib/selected-date-context';
@@ -54,7 +55,11 @@ export default function AdminLayout() {
               }}
             />
           </Tabs>
-          {isSidebar ? <RoleTopBar /> : null}
+          {isSidebar ? (
+            <RoleTopBar>
+              <AdminNotifications />
+            </RoleTopBar>
+          ) : null}
         </SelectedDateProvider>
       </PageHeaderProvider>
     </SidebarInsetProvider>
