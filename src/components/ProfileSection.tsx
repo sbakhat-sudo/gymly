@@ -4,13 +4,11 @@ import { TextInput, View } from 'react-native';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase/client';
-import { getSiteName } from '@/lib/supabase/site-name';
-import { MIN_TAP, fontFamily, spacing, useTheme } from '@/lib/theme';
-import { useAsync } from '@/lib/use-async';
+import { spacing, useTheme } from '@/lib/theme';
 
 import { AppText } from './AppText';
 import { Button } from './Button';
-import { Card, SectionTitle } from './Card';
+import { SettingsBlock, SettingsGroup, settingsInputStyle } from './settings/SettingsKit';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -20,28 +18,30 @@ const CURRENT_YEAR = new Date().getFullYear();
  * directly to `profiles` (see `supabase/migrations/20260930010000_profile_details.sql`): the
  * column-level grant there only allows a signed-in user to touch their own first_name/last_name/
  * birth_year, never role/site_id/status.
+ *
+ * Drawn as a "Profilo" group (see `SettingsKit`): labelled fields in one card with a single Save button.
  */
 export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?: boolean }) {
   const { t } = useI18n();
   const theme = useTheme();
   const auth = useAuth();
 
-  const initialFirst = auth.status === 'active' ? (auth.profile.firstName ?? '') : '';
-  const initialLast = auth.status === 'active' ? (auth.profile.lastName ?? '') : '';
-  const initialBirthYear = auth.status === 'active' && auth.profile.birthYear ? String(auth.profile.birthYear) : '';
-
-  const [firstName, setFirstName] = useState(initialFirst);
-  const [lastName, setLastName] = useState(initialLast);
-  const [birthYear, setBirthYear] = useState(initialBirthYear);
+  const profile = auth.status === 'active' || auth.status === 'admin' || auth.status === 'owner' ? auth.profile : null;
+  const [firstName, setFirstName] = useState(profile?.firstName ?? '');
+  const [lastName, setLastName] = useState(profile?.lastName ?? '');
+  const [birthYear, setBirthYear] = useState(profile?.birthYear ? String(profile.birthYear) : '');
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<'success' | 'error' | 'invalidYear' | null>(null);
-  const siteId = auth.status === 'active' ? auth.profile.siteId : null;
-  const gymName = useAsync(() => (siteId ? getSiteName(siteId) : Promise.resolve(null)), [siteId], siteId !== null);
 
-  if (auth.status !== 'active') return null;
+  if (!profile || (auth.status !== 'active' && auth.status !== 'admin' && auth.status !== 'owner')) return null;
+  const userId = auth.session.user.id;
+
+  const changed =
+    firstName.trim() !== (profile.firstName ?? '') ||
+    lastName.trim() !== (profile.lastName ?? '') ||
+    (includeBirthYear && birthYear.trim() !== (profile.birthYear ? String(profile.birthYear) : ''));
 
   async function submit(): Promise<void> {
-    if (auth.status !== 'active') return;
     setFeedback(null);
 
     let parsedYear: number | null = null;
@@ -70,7 +70,7 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
         full_name: fullName,
         ...(includeBirthYear ? { birth_year: parsedYear } : {}),
       })
-      .eq('id', auth.session.user.id);
+      .eq('id', userId);
     setBusy(false);
     if (error) {
       setFeedback('error');
@@ -80,99 +80,81 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
     void auth.refreshProfile();
   }
 
-  const inputStyle = {
-    minHeight: MIN_TAP + 4,
-    borderWidth: 1.5,
-    borderColor: feedback === 'invalidYear' ? theme.danger : theme.border,
-    borderRadius: 16,
-    paddingHorizontal: spacing.lg,
-    color: theme.text,
-    backgroundColor: theme.background,
-    fontFamily: fontFamily.body,
-    fontSize: 16,
-  } as const;
+  const input = settingsInputStyle(theme);
 
   return (
-    <Card>
-      <SectionTitle>{t('profile.title')}</SectionTitle>
-
-      {gymName.data ? (
-        <>
-          <AppText variant="caption" style={{ fontWeight: '600' }}>
-            {t('profile.gym')}
-          </AppText>
-          {/* Fixed: the Owner names the gym once, for everyone under them. */}
-          <TextInput value={gymName.data} editable={false} accessibilityLabel={t('profile.gym')} style={[inputStyle, { backgroundColor: theme.surfaceAlt, color: theme.textMuted }]} />
-          <AppText variant="caption" muted>
-            {t('profile.gym.hint')}
-          </AppText>
-        </>
-      ) : null}
-
-      <AppText variant="caption" style={{ fontWeight: '600' }}>
-        {t('profile.firstName')}
-      </AppText>
-      <TextInput
-        value={firstName}
-        onChangeText={(v) => {
-          setFirstName(v);
-          setFeedback(null);
-        }}
-        placeholder={t('profile.firstName')}
-        placeholderTextColor={theme.textMuted}
-        accessibilityLabel={t('profile.firstName')}
-        autoComplete="off"
-        textContentType="givenName"
-        style={inputStyle}
-      />
-
-      <AppText variant="caption" style={{ fontWeight: '600' }}>
-        {t('profile.lastName')}
-      </AppText>
-      <TextInput
-        value={lastName}
-        onChangeText={(v) => {
-          setLastName(v);
-          setFeedback(null);
-        }}
-        placeholder={t('profile.lastName')}
-        placeholderTextColor={theme.textMuted}
-        accessibilityLabel={t('profile.lastName')}
-        autoComplete="off"
-        textContentType="familyName"
-        style={inputStyle}
-      />
-
-      {includeBirthYear ? (
-        <>
-          <AppText variant="caption" style={{ fontWeight: '600' }}>
-            {t('profile.birthYear')}
-          </AppText>
-          <TextInput
-            value={birthYear}
-            onChangeText={(v) => {
-              setBirthYear(v.replace(/[^0-9]/g, ''));
-              setFeedback(null);
-            }}
-            placeholder="1990"
-            placeholderTextColor={theme.textMuted}
-            accessibilityLabel={t('profile.birthYear')}
-            keyboardType="number-pad"
-            maxLength={4}
-            style={inputStyle}
-          />
-        </>
-      ) : null}
-
-      {feedback ? (
-        <View accessibilityLiveRegion="polite">
-          <AppText color={feedback === 'success' ? theme.text : theme.danger} style={{ fontWeight: '600' }}>
-            {t(feedback === 'success' ? 'profile.success' : feedback === 'invalidYear' ? 'profile.birthYear.invalid' : 'profile.error')}
-          </AppText>
+    <SettingsGroup title={t('profile.title')}>
+      <SettingsBlock>
+        <View style={{ flexDirection: 'row', gap: spacing.md }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <AppText variant="caption" style={{ fontWeight: '700' }}>
+              {t('profile.firstName')}
+            </AppText>
+            <TextInput
+              value={firstName}
+              onChangeText={(v) => {
+                setFirstName(v);
+                setFeedback(null);
+              }}
+              placeholder={t('profile.firstName')}
+              placeholderTextColor={theme.textMuted}
+              accessibilityLabel={t('profile.firstName')}
+              autoComplete="off"
+              textContentType="givenName"
+              style={input}
+            />
+          </View>
+          <View style={{ flex: 1, gap: 6 }}>
+            <AppText variant="caption" style={{ fontWeight: '700' }}>
+              {t('profile.lastName')}
+            </AppText>
+            <TextInput
+              value={lastName}
+              onChangeText={(v) => {
+                setLastName(v);
+                setFeedback(null);
+              }}
+              placeholder={t('profile.lastName')}
+              placeholderTextColor={theme.textMuted}
+              accessibilityLabel={t('profile.lastName')}
+              autoComplete="off"
+              textContentType="familyName"
+              style={input}
+            />
+          </View>
         </View>
-      ) : null}
 
-      <Button label={t('profile.save')} variant="secondary" onPress={() => void submit()} disabled={busy} />
-    </Card>
+        {includeBirthYear ? (
+          <View style={{ gap: 6 }}>
+            <AppText variant="caption" style={{ fontWeight: '700' }}>
+              {t('profile.birthYear')}
+            </AppText>
+            <TextInput
+              value={birthYear}
+              onChangeText={(v) => {
+                setBirthYear(v.replace(/[^0-9]/g, ''));
+                setFeedback(null);
+              }}
+              placeholder="1990"
+              placeholderTextColor={theme.textMuted}
+              accessibilityLabel={t('profile.birthYear')}
+              keyboardType="number-pad"
+              maxLength={4}
+              style={settingsInputStyle(theme, feedback === 'invalidYear')}
+            />
+          </View>
+        ) : null}
+
+        {feedback ? (
+          <View accessibilityLiveRegion="polite">
+            <AppText color={feedback === 'success' ? theme.text : theme.danger} style={{ fontWeight: '600', fontSize: 13 }}>
+              {t(feedback === 'success' ? 'profile.success' : feedback === 'invalidYear' ? 'profile.birthYear.invalid' : 'profile.error')}
+            </AppText>
+          </View>
+        ) : null}
+
+        <Button label={t('profile.save')} onPress={() => void submit()} disabled={busy || !changed} />
+      </SettingsBlock>
+    </SettingsGroup>
   );
 }

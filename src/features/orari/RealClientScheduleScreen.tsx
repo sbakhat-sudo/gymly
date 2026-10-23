@@ -7,24 +7,26 @@ import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { getMySubscription } from '@/features/billing/billing-api';
 import { SubscriptionStatusCard } from '@/features/billing/SubscriptionStatusCard';
+import { bestHourToGo, type OpenWindow } from '@/lib/domain/gym-advice';
 import { addDays, localTime, parseTime } from '@/lib/domain/time';
 import { getSiteStatus, type SiteStatus } from '@/lib/gym-status';
+import { getMyCheckins } from '@/lib/checkins-api';
+import { useAuth } from '@/lib/auth/auth-context';
 import { useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
-import { getWeekRealBands, getWeeklyStats, type RealHourBand, type WeeklyStat } from '@/lib/real-schedule';
+import { getWeekRealBands, getWeeklyStats } from '@/lib/real-schedule';
 import { spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
-import type { Band, Weekday } from '@/schemas';
+import type { Weekday } from '@/schemas';
 
-import { FifteenDayCalendar, type CalendarDay } from './FifteenDayCalendar';
-import { RealBestMomentCard } from './RealBestMomentCard';
+import { GoTodayAdviceCard, type GoAdvice } from './GoTodayAdviceCard';
+import { MyVisitsCard, type MyVisit } from './MyVisitsCard';
 import { ScheduleHeader } from './ScheduleParts';
-import { type HourlyPoint, TodayVsYesterdayChart } from './TodayVsYesterdayChart';
+import { YesterdayBandsCard, type YesterdayHour } from './YesterdayBandsCard';
 
-const CALENDAR_DAYS = 15;
-/** Enough weekly RPC calls to always cover `today - CALENDAR_DAYS`, even when today is a Monday
- * (the worst case: the current week's own Monday contributes nothing toward the lookback). */
+/** Weeks of real hourly data read: enough to cover the last visits, yesterday and the weekday pattern. */
 const WEEKS_BACK = 4;
+const VISITS_SHOWN = 8;
 
 /** First/last hour the gym is ever open, across its whole weekly schedule — from real opening hours, never a forecast. */
 function openingHourRange(site: Pick<SiteStatus, 'openingHours'>): { first: number; last: number } | null {
@@ -39,49 +41,6 @@ function openingHourRange(site: Pick<SiteStatus, 'openingHours'>): { first: numb
   return last < 0 ? null : { first, last };
 }
 
-/** Today's historically quietest open hour, from the multi-week pattern — a genuine "usually best"
- * answer, not today's own (still-incomplete) real data. `null` if there isn't enough history yet. */
-function quietestHourToday(stats: readonly WeeklyStat[], weekday: Weekday, range: { first: number; last: number } | null): { hour: number; pct: number } | null {
-  if (!range) return null;
-  let best: { hour: number; pct: number } | null = null;
-  for (const s of stats) {
-    if (s.weekday !== weekday || s.samples === 0 || s.hour < range.first || s.hour > range.last) continue;
-    if (!best || s.pct < best.pct) best = { hour: s.hour, pct: s.pct };
-  }
-  return best;
-}
-
-/** A handful of real checkpoints spread across the gym's open hours for one specific past date —
- * early/mid-morning/afternoon/evening, picked by position in the range so a gym open 06:00–14:00
- * gets sensible checkpoints too. A checkpoint hour with no real data for that date is simply
- * skipped, never guessed. */
-function checkpointsForDate(dateKey: string, bands: readonly RealHourBand[], range: { first: number; last: number } | null): { hour: number; band: Band }[] {
-  if (!range) return [];
-  const span = range.last - range.first;
-  const checkpointHours = Array.from(new Set([0.1, 0.4, 0.7, 0.95].map((f) => Math.min(range.last, range.first + Math.round(span * f)))));
-  const byHour = new Map(bands.filter((b) => b.dateKey === dateKey).map((b) => [b.hour, b.band]));
-  const out: { hour: number; band: Band }[] = [];
-  for (const hour of checkpointHours) {
-    const band = byHour.get(hour);
-    if (band) out.push({ hour, band });
-  }
-  return out;
-}
-
-/** Every real hour of one specific date, in order — the continuous line for the "Oggi vs Ieri"
- * chart. Only hours that actually have a real check-in appear; a date with no real data yet returns
- * an empty series rather than a flat guessed line. */
-function hourlySeriesForDate(dateKey: string, bands: readonly RealHourBand[], range: { first: number; last: number } | null): HourlyPoint[] {
-  if (!range) return [];
-  const byHour = new Map(bands.filter((b) => b.dateKey === dateKey).map((b) => [b.hour, b.pct]));
-  const out: HourlyPoint[] = [];
-  for (let hour = range.first; hour <= range.last; hour++) {
-    const pct = byHour.get(hour);
-    if (pct !== undefined) out.push({ hour, pct });
-  }
-  return out;
-}
-
 /**
  * A real (approved) Client's "Storico": the app is live now, so this shows only what actually
  * happened (real check-ins) and the real pattern built from them — never a simulated forecast.
@@ -90,7 +49,7 @@ function hourlySeriesForDate(dateKey: string, bands: readonly RealHourBand[], ra
  * can branch on it.
  */
 export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const theme = useTheme();
   const focused = useIsFocused();
   const site = useAsync(() => getSiteStatus(siteId), [siteId]);
@@ -107,6 +66,9 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
   );
   const stats = useAsync(() => getWeeklyStats(siteId), [siteId], site.data !== undefined);
   const subscription = useAsync(() => getMySubscription(), [focused], focused);
+  const auth = useAuth();
+  const userId = 'session' in auth ? auth.session.user.id : null;
+  const visits = useAsync(() => (userId ? getMyCheckins(userId, siteId, VISITS_SHOWN) : Promise.resolve([])), [userId, siteId, focused], userId !== null && focused);
 
   if (site.data === undefined) {
     return (
@@ -128,12 +90,43 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
   const bands = recentBands.data;
   const yesterdayKey = addDays(local.dateKey, -1);
 
-  const calendarDays: CalendarDay[] | undefined =
-    bands &&
-    Array.from({ length: CALENDAR_DAYS }, (_, i) => {
-      const dateKey = addDays(local.dateKey, i - CALENDAR_DAYS);
-      return { dateKey, checkpoints: checkpointsForDate(dateKey, bands, range) };
-    });
+  // Hour-by-hour real bands of the weeks read, looked up by "date:hour".
+  const bandAt = new Map((bands ?? []).map((b) => [`${b.dateKey}:${b.hour}`, b.band]));
+  const myVisits: MyVisit[] = (visits.data ?? []).map((v) => {
+    const start = localTime(new Date(v.checkinAt), timezone);
+    const end = v.checkoutAt ? localTime(new Date(v.checkoutAt), timezone) : null;
+    return {
+      id: v.id,
+      dateKey: start.dateKey,
+      startMinutes: start.minutes,
+      // A visit that runs past midnight is shown as ending at closing time of its own day.
+      endMinutes: end === null ? null : end.dateKey === start.dateKey ? end.minutes : 24 * 60 - 1,
+      band: bandAt.get(`${start.dateKey}:${Math.floor(start.minutes / 60)}`) ?? null,
+    };
+  });
+
+  const yesterdayHours: YesterdayHour[] = (bands ?? [])
+    .filter((b) => b.dateKey === yesterdayKey)
+    .map((b) => ({ hour: b.hour, pct: b.pct, band: b.band }))
+    .sort((x, y) => x.hour - y.hour);
+
+  const thresholds = { greenPct: siteData.bandGreenPct, amberPct: siteData.bandAmberPct };
+  const windowsFor = (weekday: Weekday): OpenWindow[] =>
+    siteData.openingHours.filter((oh) => oh.weekday === weekday).map((oh) => ({ start: parseTime(oh.opens_at), end: parseTime(oh.closes_at) }));
+  const weekdayLabel = (dateKey: string): string => {
+    const name = new Date(`${dateKey}T12:00:00`).toLocaleDateString(lang, { weekday: 'long' });
+    return lang === 'en' ? `${name}s` : name;
+  };
+  // Today if there is still a good hour left; otherwise tomorrow's best (from the same real history).
+  const stats$ = stats.data;
+  const todayAdvice = stats$ ? bestHourToGo(stats$, local.weekday, windowsFor(local.weekday), local.minutes, thresholds) : null;
+  const tomorrowWeekday = ((local.weekday + 1) % 7) as Weekday;
+  const tomorrowAdvice = stats$ && !todayAdvice ? bestHourToGo(stats$, tomorrowWeekday, windowsFor(tomorrowWeekday), -1, thresholds) : null;
+  const advice: GoAdvice | null = todayAdvice
+    ? { day: 'today', weekdayLabel: weekdayLabel(local.dateKey), ...todayAdvice }
+    : tomorrowAdvice
+      ? { day: 'tomorrow', weekdayLabel: weekdayLabel(addDays(local.dateKey, 1)), ...tomorrowAdvice }
+      : null;
 
   return (
     <Screen>
@@ -142,20 +135,16 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
 
         <SubscriptionStatusCard state={subscription.data} />
 
-        {recentBands.error ? (
+        {visits.error ? (
           <View style={{ gap: spacing.sm }}>
             <Banner title={t('schedule.error')} />
-            <Button label={t('common.retry')} onPress={recentBands.reload} />
+            <Button label={t('common.retry')} onPress={visits.reload} />
           </View>
-        ) : calendarDays === undefined ? (
+        ) : visits.data === undefined || recentBands.data === undefined ? (
           <ActivityIndicator accessibilityLabel={t('state.loading')} />
         ) : (
-          <FifteenDayCalendar days={calendarDays} />
+          <MyVisitsCard visits={myVisits} />
         )}
-
-        {bands ? (
-          <TodayVsYesterdayChart today={hourlySeriesForDate(local.dateKey, bands, range)} yesterday={hourlySeriesForDate(yesterdayKey, bands, range)} />
-        ) : null}
 
         {stats.error ? (
           <View style={{ gap: spacing.sm }}>
@@ -165,7 +154,18 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
         ) : stats.data === undefined ? (
           <ActivityIndicator accessibilityLabel={t('state.loading')} />
         ) : (
-          <RealBestMomentCard moment={quietestHourToday(stats.data, local.weekday, range)} emptyText={t('schedule.topToday.empty')} />
+          <GoTodayAdviceCard advice={advice} />
+        )}
+
+        {recentBands.error ? (
+          <View style={{ gap: spacing.sm }}>
+            <Banner title={t('schedule.error')} />
+            <Button label={t('common.retry')} onPress={recentBands.reload} />
+          </View>
+        ) : bands === undefined ? (
+          <ActivityIndicator accessibilityLabel={t('state.loading')} />
+        ) : (
+          <YesterdayBandsCard hours={yesterdayHours} range={range} />
         )}
 
         <AppText color={theme.faint} style={{ fontSize: 11, lineHeight: 15, textAlign: 'center' }}>

@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { PulseIcon, SlidersIcon, UsersIcon } from '@/components/icons';
 import { PillTabBar } from '@/components/PillTabBar';
 import { RoleTopBar } from '@/components/RoleTopBar';
+import { OwnerNotifications } from '@/features/owner/OwnerNotifications';
 import { useI18n } from '@/lib/i18n';
 import { PageHeaderProvider } from '@/lib/page-header-context';
 import { SelectedDateProvider } from '@/lib/selected-date-context';
@@ -51,7 +52,11 @@ export default function OwnerLayout() {
               }}
             />
           </Tabs>
-          {isSidebar ? <RoleTopBar /> : null}
+          {isSidebar ? (
+            <RoleTopBar>
+              <OwnerNotifications />
+            </RoleTopBar>
+          ) : null}
         </SelectedDateProvider>
       </PageHeaderProvider>
     </SidebarInsetProvider>

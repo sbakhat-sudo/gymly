@@ -6,19 +6,19 @@ import { AccountSection } from '@/components/AccountSection';
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
-import { Card, SectionLabel } from '@/components/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { CheckIcon, MinusIcon, PlusIcon, SlidersIcon } from '@/components/icons';
+import { CheckIcon, MapPinIcon, MinusIcon, PlusIcon, SlidersIcon } from '@/components/icons';
 import { PageTitle } from '@/components/PageTitle';
 import { ProfileSection } from '@/components/ProfileSection';
 import { Screen } from '@/components/Screen';
-import { Segmented } from '@/components/Segmented';
-import { SignOutButton } from '@/components/SignOutButton';
+import { PreferencesGroup } from '@/components/settings/PreferencesGroup';
+import { ProfileHero } from '@/components/settings/ProfileHero';
+import { SettingsBlock, SettingsGroup, SettingsHero, SettingsRow } from '@/components/settings/SettingsKit';
 import { Toggle } from '@/components/Toggle';
-import { useAppState, type ThemePref } from '@/lib/app-state';
+import { useAppState } from '@/lib/app-state';
 import { ALERT_PRESETS, DEFAULT_ALERT_PRESET, presetOf, type AlertPreset, type AlertWindow } from '@/lib/domain/alerts';
 import type { WeeklyGoal } from '@/lib/domain/weekly-goal';
-import { useI18n, type Lang } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { requestAlertPermission } from '@/lib/notifications';
 import { clearSessionCaches } from '@/lib/queries';
 import { useApi, useClock } from '@/lib/services-context';
@@ -34,11 +34,11 @@ interface AlertPrefs {
 }
 
 export function SettingsScreen() {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const theme = useTheme();
   const api = useApi();
   const clock = useClock();
-  const { siteId, setSiteId, setLang, sessionCount, themePref, setThemePref, guest, setGuest, resetToInitial } = useAppState();
+  const { siteId, setSiteId, sessionCount, guest, setGuest, resetToInitial } = useAppState();
   const sites = useCurrentSite();
 
   const [prefs, setPrefs] = useState<AlertPrefs | null>(null);
@@ -121,9 +121,8 @@ export function SettingsScreen() {
 
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
+      <View style={{ paddingHorizontal: 4 }}>
         <PageTitle icon={SlidersIcon} label={t('settings.title')} circleSize={22} fontSize={26} />
-        <SignOutButton />
       </View>
 
       {deleted ? (
@@ -135,111 +134,67 @@ export function SettingsScreen() {
       ) : null}
 
       {guest ? (
-        <Card>
-          <SectionLabel>{t('settings.account.guest.title')}</SectionLabel>
-          <AppText muted style={{ fontSize: 14, lineHeight: 21 }}>
-            {t('settings.account.guest.body')}
-          </AppText>
-          {/* Leaving guest mode hands navigation back to the auth flow (root layout guard). */}
-          <Button label={t('auth.login.title')} variant="invert" onPress={() => setGuest(false)} />
-        </Card>
-      ) : (
         <>
-          <ProfileSection includeBirthYear />
-          <AccountSection />
+          <SettingsHero name={t('settings.guest.name')} roleLabel={t('settings.role.guest')} />
+          <SettingsGroup>
+            <SettingsBlock>
+              <AppText muted style={{ fontSize: 14, lineHeight: 21 }}>
+                {t('settings.account.guest.body')}
+              </AppText>
+              {/* Leaving guest mode hands navigation back to the auth flow (root layout guard). */}
+              <Button label={t('auth.login.title')} variant="invert" onPress={() => setGuest(false)} />
+            </SettingsBlock>
+          </SettingsGroup>
         </>
+      ) : (
+        <ProfileHero />
       )}
 
-      <Card style={{ padding: 14, gap: spacing.sm }}>
-        <View style={{ paddingHorizontal: 4, paddingTop: 4, paddingBottom: 2 }}>
-          <SectionLabel>{t('settings.gym')}</SectionLabel>
-        </View>
+      <SettingsGroup title={t('settings.gym')}>
         {(sites.data ?? []).map((site) => {
           const selected = site.site_id === siteId;
           return (
-            <Pressable
+            <SettingsRow
               key={site.site_id}
+              icon={MapPinIcon}
+              label={site.name}
+              subtitle={site.address}
+              role="radio"
+              selected={selected}
+              a11yLabel={`${site.name}${selected ? `, ${t('settings.gym.selected')}` : ''}`}
+              chevron={false}
               onPress={() => {
                 setSiteId(site.site_id);
                 setDeleted(false);
               }}
-              accessibilityRole="radio"
-              accessibilityState={{ selected, checked: selected }}
-              accessibilityLabel={`${site.name}${selected ? `, ${t('settings.gym.selected')}` : ''}`}
-              style={{
-                minHeight: MIN_TAP + 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.md,
-                paddingVertical: spacing.md,
-                paddingHorizontal: 14,
-                borderRadius: 18,
-                borderWidth: selected ? 2 : 1,
-                borderColor: selected ? theme.primary : theme.border,
-                backgroundColor: selected ? theme.surfaceAlt : 'transparent',
-              }}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <AppText style={{ fontSize: 15, fontWeight: '600' }}>{site.name}</AppText>
-                {site.address ? (
-                  <AppText muted style={{ fontSize: 12, lineHeight: 16 }}>
-                    {site.address}
-                  </AppText>
-                ) : null}
-              </View>
-              <View
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 12,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: selected ? theme.primary : 'transparent',
-                  borderWidth: 1.5,
-                  borderColor: selected ? theme.primary : theme.borderStrong,
-                }}>
-                {selected ? <CheckIcon color={theme.onPrimary} size={14} strokeWidth={3} /> : null}
-              </View>
-            </Pressable>
+              right={
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: selected ? theme.primary : 'transparent',
+                    borderWidth: 1.5,
+                    borderColor: selected ? theme.primary : theme.borderStrong,
+                  }}>
+                  {selected ? <CheckIcon color={theme.onPrimary} size={14} strokeWidth={3} /> : null}
+                </View>
+              }
+            />
           );
         })}
-      </Card>
+      </SettingsGroup>
 
-      <Card>
-        <SectionLabel>{t('settings.language')}</SectionLabel>
-        <Segmented<Lang>
-          label={t('settings.language')}
-          value={lang}
-          onChange={setLang}
-          options={[
-            { value: 'it', label: t('settings.lang.it') },
-            { value: 'en', label: t('settings.lang.en') },
-          ]}
-        />
-      </Card>
-
-      <Card>
-        <SectionLabel>{t('settings.theme.title')}</SectionLabel>
-        <Segmented<ThemePref>
-          label={t('settings.theme.title')}
-          value={themePref}
-          onChange={setThemePref}
-          options={[
-            { value: 'auto', label: t('settings.theme.auto') },
-            { value: 'light', label: t('settings.theme.light') },
-            { value: 'dark', label: t('settings.theme.dark') },
-          ]}
-        />
-        <AppText muted style={{ fontSize: 12, lineHeight: 18 }}>
-          {t('settings.theme.help')}
-        </AppText>
-      </Card>
+      <PreferencesGroup withTheme />
 
       {/* Tied to the real `checkins` table (`WeeklyGoalPopup.tsx`'s own count of this week's
           check-outs) — the guest/mock flow's check-ins never reach that table, so this card (and the
           popup it configures) is real-Client-only, same scoping as the three removed below. */}
       {!guest ? (
-        <Card>
-          <SectionLabel>{t('settings.weeklyGoal.title')}</SectionLabel>
+        <SettingsGroup title={t('settings.weeklyGoal.title')}>
+          <SettingsBlock>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginTop: spacing.xs }}>
             <Pressable
               onPress={() => void setWeeklyGoal(Math.max(1, weeklyGoal - 1) as WeeklyGoal)}
@@ -300,7 +255,15 @@ export function SettingsScreen() {
           <AppText muted style={{ fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: spacing.md }}>
             {t('settings.weeklyGoal.help')}
           </AppText>
-        </Card>
+          </SettingsBlock>
+        </SettingsGroup>
+      ) : null}
+
+      {!guest ? (
+        <>
+          <ProfileSection includeBirthYear />
+          <AccountSection />
+        </>
       ) : null}
 
       {/* Local alert prefs, "cancella i miei dati" and the privacy blurb are all guest/demo-flow
@@ -311,8 +274,8 @@ export function SettingsScreen() {
           Client's Impostazioni on request, the guest/demo path (still spec-compliant) is untouched. */}
       {guest ? (
         <>
-          <Card>
-            <SectionLabel>{t('settings.alerts.title')}</SectionLabel>
+          <SettingsGroup title={t('settings.alerts.title')}>
+            <SettingsBlock>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: MIN_TAP }}>
               <AppText style={{ flex: 1, fontWeight: '500' }}>{t('settings.alerts.toggle')}</AppText>
               <Toggle
@@ -370,22 +333,25 @@ export function SettingsScreen() {
             <AppText muted style={{ fontSize: 12, lineHeight: 18 }}>
               {t('settings.alerts.help')}
             </AppText>
-          </Card>
+            </SettingsBlock>
+          </SettingsGroup>
 
-          <Card>
-            <SectionLabel>{t('settings.delete.title')}</SectionLabel>
+          <SettingsGroup title={t('settings.delete.title')}>
+            <SettingsBlock>
             <AppText muted style={{ fontSize: 14, lineHeight: 21 }}>
               {t('settings.delete.body')}
             </AppText>
             <Button label={t('settings.delete.button')} variant="dangerSoft" onPress={() => setConfirmingDelete(true)} />
-          </Card>
+            </SettingsBlock>
+          </SettingsGroup>
 
-          <Card style={{ gap: 10 }}>
-            <SectionLabel>{t('settings.privacy.title')}</SectionLabel>
+          <SettingsGroup title={t('settings.privacy.title')}>
+            <SettingsBlock>
             <AppText muted style={{ fontSize: 13, lineHeight: 20 }}>
               {t('settings.privacy.body')}
             </AppText>
-          </Card>
+            </SettingsBlock>
+          </SettingsGroup>
         </>
       ) : null}
 

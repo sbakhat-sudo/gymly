@@ -7,11 +7,13 @@ import { AddressMapPreview } from '@/components/AddressMapPreview';
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
-import { Card, SectionLabel } from '@/components/Card';
 import { CheckIcon, SlidersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { SignOutButton } from '@/components/SignOutButton';
+import { PreferencesGroup } from '@/components/settings/PreferencesGroup';
+import { ProfileHero } from '@/components/settings/ProfileHero';
+import { SettingsBlock, SettingsGroup } from '@/components/settings/SettingsKit';
+import { ProfileSection } from '@/components/ProfileSection';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase/client';
 import { useI18n } from '@/lib/i18n';
@@ -82,11 +84,13 @@ function ChainNameCard() {
   } as const;
 
   return (
-    <Card>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <SectionLabel>{t('owner.settings.chainName.title')}</SectionLabel>
-        {!editing ? <AppText onPress={startEditing} style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('owner.settings.chainName.edit')}</AppText> : null}
-      </View>
+    <SettingsGroup title={t('owner.settings.chainName.title')}>
+      <SettingsBlock>
+      {!editing ? (
+        <View style={{ alignItems: 'flex-end' }}>
+          <AppText onPress={startEditing} accessibilityRole="button" style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('owner.settings.chainName.edit')}</AppText>
+        </View>
+      ) : null}
 
       {chainName.loading && !chainName.data ? <ActivityIndicator /> : null}
 
@@ -102,7 +106,8 @@ function ChainNameCard() {
           </View>
         </View>
       )}
-    </Card>
+      </SettingsBlock>
+    </SettingsGroup>
   );
 }
 
@@ -158,11 +163,13 @@ function HqLocationCard() {
   } as const;
 
   return (
-    <Card>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <SectionLabel>{t('owner.settings.hq.title')}</SectionLabel>
-        {!editing ? <AppText onPress={startEditing} style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('owner.settings.hq.edit')}</AppText> : null}
-      </View>
+    <SettingsGroup title={t('owner.settings.hq.title')}>
+      <SettingsBlock>
+      {!editing ? (
+        <View style={{ alignItems: 'flex-end' }}>
+          <AppText onPress={startEditing} accessibilityRole="button" style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('owner.settings.hq.edit')}</AppText>
+        </View>
+      ) : null}
 
       {hq.loading && !hq.data ? <ActivityIndicator /> : null}
 
@@ -190,7 +197,8 @@ function HqLocationCard() {
           </View>
         </View>
       )}
-    </Card>
+      </SettingsBlock>
+    </SettingsGroup>
   );
 }
 
@@ -290,8 +298,8 @@ function SecurityCard() {
   };
 
   return (
-    <Card>
-      <SectionLabel>{t('owner.settings.security.title')}</SectionLabel>
+    <SettingsGroup title={t('owner.settings.security.title')}>
+      <SettingsBlock>
 
       {enrolledFactor ? (
         <View style={{ gap: spacing.sm }}>
@@ -333,7 +341,8 @@ function SecurityCard() {
           <Button label={t('owner.settings.security.enable')} onPress={() => void startEnroll()} disabled={busy} />
         </View>
       )}
-    </Card>
+      </SettingsBlock>
+    </SettingsGroup>
   );
 }
 
@@ -348,24 +357,23 @@ export function OwnerSettingsScreen() {
 
   return (
     <Screen>
-      <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
+      <View style={{ paddingTop: spacing.xxl }}>
         <ScreenHeader icon={SlidersIcon} label={t('settings.title')} />
-        <SignOutButton />
       </View>
 
-      <AccountSection />
+      <ProfileHero />
 
       <ChainNameCard />
 
       <HqLocationCard />
 
+      <PreferencesGroup withTheme />
+
+      <ProfileSection />
+
       <SecurityCard />
 
-      <Card>
-        <AppText muted style={{ fontSize: 12.5, lineHeight: 18 }}>
-          {t('owner.settings.moreComingSoon')}
-        </AppText>
-      </Card>
+      <AccountSection />
     </Screen>
   );
 }

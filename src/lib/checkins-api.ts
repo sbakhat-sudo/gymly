@@ -6,6 +6,27 @@ export interface OpenCheckin {
   lastConfirmedAt: string;
 }
 
+/** One of the caller's own past visits (RLS: own rows only). `checkoutAt` is null while it is still open. */
+export interface MyCheckin {
+  id: number;
+  checkinAt: string;
+  checkoutAt: string | null;
+}
+
+/** The caller's own latest Client visits at a site, newest first. */
+export async function getMyCheckins(userId: string, siteId: string, limit = 10): Promise<MyCheckin[]> {
+  const { data, error } = await supabase
+    .from('checkins')
+    .select('id, checkin_at, checkout_at')
+    .eq('user_id', userId)
+    .eq('site_id', siteId)
+    .eq('kind', 'client')
+    .order('checkin_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data.map((r) => ({ id: r.id, checkinAt: r.checkin_at, checkoutAt: r.checkout_at }));
+}
+
 /** The caller's own open check-in of the given kind at the given site, if any (RLS: own rows only). */
 export async function getOpenCheckin(userId: string, siteId: string, kind: 'client' | 'coach'): Promise<OpenCheckin | null> {
   const { data, error } = await supabase
