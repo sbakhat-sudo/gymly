@@ -141,13 +141,13 @@ function HomeContent({ site }: { site: SiteSummary }) {
           accessibilityRole="button"
           accessibilityLabel={`${site.name}. ${t('home.changeGym')}`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: MIN_TAP, flexShrink: 1 }}>
-          <LogoMark size={38} bgColor={theme.background} bandColor={liveBand ? theme.band[liveBand].solid : theme.textMuted} />
+          <LogoMark size={30} bgColor={theme.background} bandColor={liveBand ? theme.band[liveBand].solid : theme.textMuted} />
           <View style={{ flexShrink: 1 }}>
             <AppText muted style={{ fontSize: 11, lineHeight: 14, fontWeight: '500' }}>
               {clockLabel}
             </AppText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <AppText variant="display" accessibilityRole="header" numberOfLines={1} style={{ flexShrink: 1, fontSize: 36, lineHeight: 41, letterSpacing: 36 * -0.05 }}>
+              <AppText variant="display" accessibilityRole="header" numberOfLines={1} style={{ flexShrink: 1, fontSize: 26, lineHeight: 30, letterSpacing: 26 * -0.05 }}>
                 {site.name}
               </AppText>
               <ChevronDownIcon color={theme.textMuted} size={15} strokeWidth={2.6} />

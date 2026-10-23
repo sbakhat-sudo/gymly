@@ -78,9 +78,9 @@ export interface Database {
            * once) — a brand-new Client with no `subscriptions` row AND this still true is the one who
            * must see the mandatory plan-choice popup. See client_get_my_subscription(). */
           subscription_required: boolean;
-          /** Set once, the moment an approved Owner creates their gym_chains row (create_owner_chain())
-           * — same role for Owner that site_id already plays for Manager: "hasn't created their own
-           * thing yet" is this being null, not a separate status. */
+          /** Set the moment Admin approves the Owner (admin_set_profile_status() creates the
+           * gym_chains row right then, with a default name) — same role for Owner that site_id
+           * already plays for Manager: "has no business yet" is this being null, not a separate status. */
           chain_id: string | null;
         };
         Insert: {
@@ -182,12 +182,6 @@ export interface Database {
         Update: never; // only via admin_update_settings()
         Relationships: [];
       };
-      broadcasts: {
-        Row: { id: number; title: string; body: string; created_by: string; created_at: string };
-        Insert: never; // only via admin_create_broadcast()
-        Update: never;
-        Relationships: [];
-      };
       manager_activity_log: {
         Row: { manager_id: string; site_id: string; log_date: string; created_at: string };
         Insert: { manager_id: string; site_id: string }; // log_date defaults to current_date server-side
@@ -196,7 +190,7 @@ export interface Database {
       };
       gym_chains: {
         Row: { id: string; name: string; owner_id: string | null; hq_address: string | null; plan: 'trial' | 'pro' | 'business'; created_at: string };
-        Insert: never; // only via create_manager_site()/create_owner_chain()
+        Insert: never; // only via create_manager_site()/admin_set_profile_status()
         Update: never;
         Relationships: [];
       };
@@ -263,7 +257,9 @@ export interface Database {
         Row: {
           user_id: string;
           site_id: string;
-          plan_type: 'monthly' | 'annual';
+          /** Legacy — unset (null) for every subscription chosen through a `site_plan_cards` card;
+           * kept only so rows from before that existed still have a value. */
+          plan_type: 'monthly' | 'annual' | null;
           status: 'active' | 'grace' | 'blocked';
           start_date: string;
           expiry_date: string;
@@ -272,9 +268,43 @@ export interface Database {
           warning_sent_at: string | null;
           created_at: string;
           updated_at: string;
+          /** The `site_plan_cards` row this subscription was chosen/assigned from — null for legacy
+           * (pre-card) rows. name/price_eur/duration_days/plan_description below start as a snapshot
+           * of it at choose/assign time, but manager_update_plan_card() keeps them in sync with the
+           * card afterwards too (a deliberate product decision — editing a card updates everyone
+           * still linked to it, expiry_date included). Deactivating a card does NOT propagate: that
+           * only stops it being offered to new signups. */
+          card_id: string | null;
+          plan_name: string | null;
+          price_eur: number | null;
+          duration_days: number | null;
+          plan_description: string | null;
+          plan_tier: 'normal' | 'vip' | 'vvip' | null;
+          plan_color: string | null;
         };
         Insert: never; // only via client_choose_plan()/manager_assign_plan()
         Update: never; // only via client_confirm_payment_during_grace()/client_switch_plan()
+        Relationships: [];
+      };
+      site_plan_cards: {
+        Row: {
+          id: string;
+          site_id: string;
+          name: string;
+          price_eur: number;
+          duration_days: number;
+          /** What the plan actually includes, the Manager's own words — null until they write one. */
+          description: string | null;
+          /** Hex the Manager picked for this card — null falls back to the deterministic auto-tint
+           * (`avatarTint`) client-side, so a card is never colourless. */
+          color: string | null;
+          /** A purely visual/organizational badge, independent of price/duration/colour. */
+          tier: 'normal' | 'vip' | 'vvip';
+          active: boolean;
+          created_at: string;
+        };
+        Insert: never; // only via manager_create_plan_card()
+        Update: never; // only via manager_update_plan_card()/manager_set_plan_card_active()
         Relationships: [];
       };
     };
@@ -356,12 +386,16 @@ export interface Database {
         Returns: undefined;
       };
       request_owner_signup: {
-        Args: { p_plan: 'trial' | 'pro' | 'business'; p_full_name: string | null };
+        Args: { p_plan: 'trial' | 'pro' | 'business'; p_full_name: string | null; p_phone?: string | null };
         Returns: undefined;
       };
-      create_owner_chain: {
+      owner_get_chain_name: {
+        Args: Record<string, never>;
+        Returns: string | null;
+      };
+      owner_rename_chain: {
         Args: { p_name: string };
-        Returns: string;
+        Returns: undefined;
       };
       complete_self_registration: {
         Args: { p_role: 'coach' | 'client'; p_site_id: string; p_full_name: string | null; p_phone?: string | null };
@@ -416,7 +450,21 @@ export interface Database {
           managers_total: number;
           managers_active: number;
           managers_pending: number;
+          owners_pending: number;
           checkins_today: number;
+        }[];
+      };
+      admin_get_owners: {
+        Args: Record<string, never>;
+        Returns: {
+          owner_id: string;
+          full_name: string | null;
+          email: string;
+          chain_name: string | null;
+          plan: 'trial' | 'pro' | 'business' | null;
+          status: 'pending' | 'active' | 'rejected';
+          managers_count: number;
+          created_at: string;
         }[];
       };
       admin_set_profile_name: {
@@ -437,10 +485,6 @@ export interface Database {
       };
       admin_update_settings: {
         Args: { p_default_capacity_reference: number; p_support_email: string | null };
-        Returns: undefined;
-      };
-      admin_create_broadcast: {
-        Args: { p_title: string; p_body: string };
         Returns: undefined;
       };
       admin_delete_manager: {
@@ -527,7 +571,10 @@ export interface Database {
         Returns: {
           needsPlanChoice: boolean;
           subscription: {
-            planType: 'monthly' | 'annual';
+            planName: string;
+            priceEur: number | null;
+            planDescription: string | null;
+            planTier: 'normal' | 'vip' | 'vvip' | null;
             status: 'active' | 'grace' | 'blocked';
             startDate: string;
             expiryDate: string;
@@ -538,7 +585,7 @@ export interface Database {
         };
       };
       client_choose_plan: {
-        Args: { p_plan: 'monthly' | 'annual' };
+        Args: { p_card_id: string };
         Returns: undefined;
       };
       client_confirm_payment_during_grace: {
@@ -546,7 +593,7 @@ export interface Database {
         Returns: undefined;
       };
       client_switch_plan: {
-        Args: { p_plan: 'monthly' | 'annual' };
+        Args: { p_card_id: string };
         Returns: undefined;
       };
       manager_get_client_subscriptions: {
@@ -554,7 +601,9 @@ export interface Database {
         Returns: {
           client_id: string;
           full_name: string | null;
-          plan_type: 'monthly' | 'annual' | null;
+          plan_name: string | null;
+          price_eur: number | null;
+          plan_color: string | null;
           status: 'active' | 'grace' | 'blocked' | null;
           start_date: string | null;
           expiry_date: string | null;
@@ -562,7 +611,46 @@ export interface Database {
         }[];
       };
       manager_assign_plan: {
-        Args: { p_client_id: string; p_plan: 'monthly' | 'annual' };
+        Args: { p_client_id: string; p_card_id: string };
+        Returns: undefined;
+      };
+      manager_create_plan_card: {
+        Args: {
+          p_name: string;
+          p_price_eur: number;
+          p_duration_days: number;
+          p_description?: string | null;
+          p_color?: string | null;
+          p_tier?: 'normal' | 'vip' | 'vvip';
+        };
+        Returns: string;
+      };
+      manager_update_plan_card: {
+        Args: {
+          p_card_id: string;
+          p_name: string;
+          p_price_eur: number;
+          p_duration_days: number;
+          p_description?: string | null;
+          p_color?: string | null;
+          p_tier?: 'normal' | 'vip' | 'vvip';
+        };
+        Returns: undefined;
+      };
+      manager_set_plan_card_active: {
+        Args: { p_card_id: string; p_active: boolean };
+        Returns: undefined;
+      };
+      manager_delete_plan_card: {
+        Args: { p_card_id: string };
+        Returns: undefined;
+      };
+      manager_set_subscription_status: {
+        Args: { p_client_id: string; p_status: 'active' | 'blocked' };
+        Returns: undefined;
+      };
+      manager_delete_subscription: {
+        Args: { p_client_id: string };
         Returns: undefined;
       };
       is_owner: {

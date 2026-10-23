@@ -88,7 +88,7 @@ export function ClientFeedbackScreen() {
   return (
     <Screen onRefresh={ratings.reload} refreshing={ratings.loading && ratings.data !== undefined}>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.md }}>
-        <PageTitle icon={StarFilledIcon} label={t('feedback.tab.title')} circleSize={28} fontSize={36} />
+        <PageTitle icon={StarFilledIcon} label={t('feedback.tab.title')} circleSize={22} fontSize={26} />
         <AppText muted style={{ fontSize: 14, lineHeight: 20 }}>
           {t('feedback.tab.subtitle')}
         </AppText>

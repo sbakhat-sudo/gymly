@@ -223,20 +223,6 @@ export async function getRecentActivity(siteId: string, todayStartIso: string): 
   return events;
 }
 
-export interface Broadcast {
-  id: number;
-  title: string;
-  body: string;
-  createdAt: string;
-}
-
-/** Comunicazioni dall'Admin — in-app only, read-only for the Manager. */
-export async function getBroadcasts(): Promise<Broadcast[]> {
-  const { data, error } = await supabase.from('broadcasts').select('id, title, body, created_at').order('created_at', { ascending: false }).limit(10);
-  if (error) throw error;
-  return data.map((b) => ({ id: b.id, title: b.title, body: b.body, createdAt: b.created_at }));
-}
-
 export interface RosterEntry {
   userId: string;
   role: 'coach' | 'client';

@@ -286,7 +286,6 @@ function NavigatorStack({
         {/* Secondary Admin screens, reached by pushing from the Admin's own Impostazioni hub — kept
             outside the (admin) tab group the same way redemption/[id] sits outside (client)'s. */}
         <Stack.Protected guard={auth.status === 'admin' && !isNative}>
-          <Stack.Screen name="comunicazioni" />
           <Stack.Screen name="pagamento" />
         </Stack.Protected>
         <Stack.Screen name="redemption/[id]" options={{ presentation: 'modal' }} />

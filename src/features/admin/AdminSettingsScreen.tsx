@@ -5,7 +5,7 @@ import { AccountSection } from '@/components/AccountSection';
 import { AppText } from '@/components/AppText';
 import { Card, SectionLabel } from '@/components/Card';
 import { GroupHeader } from '@/components/GroupHeader';
-import { BellIcon, ChevronRightIcon, ClockIcon, CreditCardIcon, EyeIcon, GearIcon, SlidersIcon } from '@/components/icons';
+import { ChevronRightIcon, ClockIcon, CreditCardIcon, EyeIcon, GearIcon, SlidersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Segmented } from '@/components/Segmented';
@@ -32,8 +32,7 @@ export function AdminSettingsScreen() {
           complaint: everything read as equally important with no structure to scan. */}
       <GroupHeader icon={GearIcon} label={t('admin.settings.platform')} />
       <Card style={{ padding: 0, gap: 0 }}>
-        <NavRow href="/pagamento" label={t('admin.billing.title')} icon={CreditCardIcon} />
-        <NavRow href="/comunicazioni" label={t('admin.broadcasts.title')} icon={BellIcon} last />
+        <NavRow href="/pagamento" label={t('admin.billing.title')} icon={CreditCardIcon} last />
       </Card>
 
       <GroupHeader icon={EyeIcon} label={t('admin.settings.security')} />

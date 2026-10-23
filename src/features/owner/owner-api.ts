@@ -131,3 +131,14 @@ export async function setOwnerHq(address: string, lat?: number, lng?: number): P
   const { error } = await supabase.rpc('owner_set_hq', { p_address: address, p_lat: lat ?? null, p_lng: lng ?? null });
   if (error) throw error;
 }
+
+export async function getOwnerChainName(): Promise<string | null> {
+  const { data, error } = await supabase.rpc('owner_get_chain_name');
+  if (error) throw error;
+  return data;
+}
+
+export async function renameOwnerChain(name: string): Promise<void> {
+  const { error } = await supabase.rpc('owner_rename_chain', { p_name: name });
+  if (error) throw error;
+}

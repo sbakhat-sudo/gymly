@@ -18,7 +18,7 @@ import { useI18n } from '@/lib/i18n';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
-import { getOwnerHq, setOwnerHq } from './owner-api';
+import { getOwnerChainName, getOwnerHq, renameOwnerChain, setOwnerHq } from './owner-api';
 
 function openExternalUrl(url: string): void {
   if (Platform.OS === 'web') {
@@ -36,6 +36,74 @@ function googleMapsUrl(lat: string, lng: string, addressQuery: string | null): s
   if (lat.trim() !== '' && lng.trim() !== '' && Number.isFinite(latNum) && Number.isFinite(lngNum)) return `https://www.google.com/maps/@${latNum},${lngNum},18z`;
   if (addressQuery) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery)}`;
   return 'https://www.google.com/maps';
+}
+
+/** The chain name gets an auto-generated default (the Owner's own full name) the moment Admin
+ * approves them (admin_set_profile_status()) — there's no longer a one-time "name your business"
+ * screen (see complete-profile.tsx's own docstring). This card is the only way to change it. */
+function ChainNameCard() {
+  const { t } = useI18n();
+  const theme = useTheme();
+  const chainName = useAsync(() => getOwnerChainName(), []);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+
+  function startEditing(): void {
+    setName(chainName.data ?? '');
+    setEditing(true);
+  }
+
+  async function save(): Promise<void> {
+    if (name.trim().length === 0) return;
+    setSaving(true);
+    setError(false);
+    try {
+      await renameOwnerChain(name);
+      await chainName.reload();
+      setEditing(false);
+    } catch (e) {
+      logger.error('owner.rename_chain_failed', e);
+      setError(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle = {
+    minHeight: MIN_TAP,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    color: theme.text,
+    fontSize: 15,
+  } as const;
+
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <SectionLabel>{t('owner.settings.chainName.title')}</SectionLabel>
+        {!editing ? <AppText onPress={startEditing} style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('owner.settings.chainName.edit')}</AppText> : null}
+      </View>
+
+      {chainName.loading && !chainName.data ? <ActivityIndicator /> : null}
+
+      {!editing ? (
+        <AppText style={{ fontSize: 14 }}>{chainName.data}</AppText>
+      ) : (
+        <View style={{ gap: spacing.sm }}>
+          <TextInput value={name} onChangeText={setName} placeholder={t('owner.settings.chainName.placeholder')} placeholderTextColor={theme.textMuted} style={inputStyle} />
+          {error ? <Banner title={t('owner.settings.chainName.error')} /> : null}
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Button label={t('common.close')} variant="secondary" onPress={() => setEditing(false)} />
+            <Button label={t('owner.settings.chainName.save')} onPress={() => void save()} disabled={saving || name.trim().length === 0} />
+          </View>
+        </View>
+      )}
+    </Card>
+  );
 }
 
 /** "Posizione Palestra" here means the Owner's own HQ/office address (`gym_chains.hq_address`) —
@@ -286,6 +354,8 @@ export function OwnerSettingsScreen() {
       </View>
 
       <AccountSection />
+
+      <ChainNameCard />
 
       <HqLocationCard />
 

@@ -44,7 +44,7 @@ function PointsContent({ site }: { site: SiteSummary }) {
   return (
     <View style={{ gap: 14 }}>
       <View style={{ gap: 6, paddingHorizontal: 4 }}>
-        <PageTitle icon={StarIcon} label={t('points.title')} circleSize={28} fontSize={36} />
+        <PageTitle icon={StarIcon} label={t('points.title')} circleSize={22} fontSize={26} />
         <AppText muted style={{ fontSize: 14, lineHeight: 20 }}>
           {t('points.subtitle')}
         </AppText>

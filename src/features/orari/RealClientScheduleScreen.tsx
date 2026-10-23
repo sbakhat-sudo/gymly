@@ -5,6 +5,8 @@ import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { getMySubscription } from '@/features/billing/billing-api';
+import { SubscriptionStatusCard } from '@/features/billing/SubscriptionStatusCard';
 import { addDays, localTime, parseTime } from '@/lib/domain/time';
 import { getSiteStatus, type SiteStatus } from '@/lib/gym-status';
 import { useNow } from '@/lib/hooks';
@@ -104,6 +106,7 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
     site.data !== undefined
   );
   const stats = useAsync(() => getWeeklyStats(siteId), [siteId], site.data !== undefined);
+  const subscription = useAsync(() => getMySubscription(), [focused], focused);
 
   if (site.data === undefined) {
     return (
@@ -136,6 +139,8 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
     <Screen>
       <View style={{ gap: 18 }}>
         <ScheduleHeader gymName={siteData.name} subtitle={t('schedule.subtitleReal')} />
+
+        <SubscriptionStatusCard state={subscription.data} />
 
         {recentBands.error ? (
           <View style={{ gap: spacing.sm }}>

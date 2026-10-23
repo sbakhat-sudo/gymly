@@ -41,7 +41,7 @@ export function PaymentDueBanner() {
     setBusy(true);
     setError(false);
     try {
-      const result = await PaymentService.charge({ planType: sub!.planType });
+      const result = await PaymentService.charge({ planName: sub!.planName, priceEur: sub!.priceEur ?? 0 });
       if (!result.success) throw new Error('payment failed');
       await confirmPaymentDuringGrace();
       subscription.reload();

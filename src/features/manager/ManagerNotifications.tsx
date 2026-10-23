@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { AlertTriangleIcon, InboxIcon, InfoIcon } from '@/components/icons';
+import { AlertTriangleIcon, InboxIcon } from '@/components/icons';
 import { NotificationBell } from '@/components/NotificationBell';
 import { NotificationsSheet, type NotificationListItem } from '@/components/NotificationsSheet';
 import { useAuth } from '@/lib/auth/auth-context';
@@ -13,22 +13,21 @@ import { storage } from '@/lib/storage';
 import { useTheme } from '@/lib/theme';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
-import { getBroadcasts, getIssues, getPendingRequests, type Broadcast, type ManagerIssueEntry, type PendingRequest } from './manager-api';
+import { getIssues, getPendingRequests, type ManagerIssueEntry, type PendingRequest } from './manager-api';
 
 const POLL_MS = 20_000;
 const SEEN_IDS_CAP = 500;
 
 /**
- * Everything that "arrives" for a Manager, in one place: new client signup requests, pending
- * (not yet resolved) issue reports, and Admin broadcasts the Manager hasn't marked read yet —
- * combined into one bell + a scrollable list (icon, title, description, relative time, unread
- * dot), with an explicit "Segna tutte lette" action and All/Unread tabs (`NotificationsSheet`).
+ * Everything that "arrives" for a Manager, in one place: new client signup requests and pending
+ * (not yet resolved) issue reports — combined into one bell + a scrollable list (icon, title,
+ * description, relative time, unread dot), with an explicit "Segna tutte lette" action and
+ * All/Unread tabs (`NotificationsSheet`).
  *
- * "Read" for a broadcast is a single watermark timestamp (`managerLastSeenBroadcastAt`) — fine
- * since broadcasts only ever arrive newest-first. A request/issue needs per-item tracking instead
- * (`managerSeenNotificationIds`): the Manager can open an older one after a newer one without that
- * meaning everything older is now "seen" too, which a single watermark can't express. Tapping an
- * item marks *that* item seen; "Segna tutte lette" marks everything currently listed seen at once.
+ * "Read" is tracked per-item (`managerSeenNotificationIds`): the Manager can open an older one
+ * after a newer one without that meaning everything older is now "seen" too, which a single
+ * watermark couldn't express. Tapping an item marks *that* item seen; "Segna tutte lette" marks
+ * everything currently listed seen at once.
  *
  * In sidebar mode (wide web), `RoleTopBar` (`(manager)/_layout.tsx`) renders one copy of this bell
  * fixed above every screen instead, passing `hideInSidebarMode={false}` so *that* instance still
@@ -49,13 +48,10 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
 
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [issues, setIssues] = useState<ManagerIssueEntry[]>([]);
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
-  const [lastSeen, setLastSeen] = useState<string | null>(null);
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    storage.get('managerLastSeenBroadcastAt').then((v) => setLastSeen(v ?? null));
     storage.get('managerSeenNotificationIds').then((v) => setSeenIds(v ?? []));
   }, []);
 
@@ -90,10 +86,6 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
         (all) => alive && setIssues(all.filter((i) => i.status === 'pending')),
         () => undefined
       );
-      getBroadcasts().then(
-        (b) => alive && setBroadcasts(b),
-        () => undefined
-      );
     };
     load();
     const id = setInterval(load, POLL_MS);
@@ -103,10 +95,9 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
     };
   }, [siteId, appActive, isSidebar, hideInSidebarMode]);
 
-  const unseenBroadcasts = broadcasts.filter((b) => !lastSeen || b.createdAt > lastSeen);
   const unreadRequests = requests.filter((r) => !seenIds.includes(`request-${r.userId}`));
   const unreadIssues = issues.filter((i) => !seenIds.includes(`issue-${i.id}`));
-  const totalCount = unreadRequests.length + unreadIssues.length + unseenBroadcasts.length;
+  const totalCount = unreadRequests.length + unreadIssues.length;
 
   const items: NotificationListItem[] = [
     ...requests.map((r): NotificationListItem => {
@@ -135,25 +126,9 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
         onPress: () => goTo('/(manager)/issues', id, i.createdAt),
       };
     }),
-    ...broadcasts.map(
-      (b): NotificationListItem => ({
-        id: `broadcast-${b.id}`,
-        icon: InfoIcon,
-        tint: theme.primary,
-        title: b.title,
-        description: b.body,
-        createdAt: b.createdAt,
-        read: lastSeen != null && b.createdAt <= lastSeen,
-      })
-    ),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   function markAllRead(): void {
-    const newestBroadcast = broadcasts[0]?.createdAt;
-    if (newestBroadcast) {
-      setLastSeen(newestBroadcast);
-      void storage.set('managerLastSeenBroadcastAt', newestBroadcast);
-    }
     markSeen([...requests.map((r) => `request-${r.userId}`), ...issues.map((i) => `issue-${i.id}`)]);
   }
 

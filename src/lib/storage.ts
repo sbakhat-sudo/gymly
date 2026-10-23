@@ -64,14 +64,11 @@ export const STORAGE_SCHEMAS = {
   pendingManagerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string() }),
   /** Same role as `pendingManagerPlan`, for the Owner's own signup (`OwnerSignupScreen.tsx`) —
    * Manager no longer self-registers at all, this is its replacement. */
-  pendingOwnerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string() }),
+  pendingOwnerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string(), phone: z.string() }),
   /** The last geofence "you're near the gym" notification `geofenceTask.ts` actually sent —
    * debounces it to at most once an hour. One fixed key, not one per site, is enough: a client
    * belongs to exactly one gym (see `useSyncGeofences.ts`'s own comment on the same constraint). */
   geofenceLastNotify: z.object({ siteId: SiteIdSchema, sentAt: Rfc3339UtcSchema }),
-  /** Newest `broadcasts.created_at` the Manager has opened the notifications panel since — anything
-   * newer counts as unread (ManagerNotifications.tsx). `null` until the panel's been opened once. */
-  managerLastSeenBroadcastAt: Rfc3339UtcSchema.nullable(),
   /** IDs (`request-<userId>` / `issue-<id>`) of pending requests/issues the Manager has tapped
    * through to, or marked read in bulk — a watermark timestamp doesn't work for these the way it
    * does for broadcasts, since the Manager can open an older one after a newer one without that

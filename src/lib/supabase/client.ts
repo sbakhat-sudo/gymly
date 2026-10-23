@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 import type { Database } from './database.types';
 
@@ -20,7 +21,13 @@ export const supabase = createClient<Database>(url, anonKey, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // Web-only: the Manager/Owner/Coach dashboards run in a browser, and an email-confirmation
+    // link lands back here with the session tokens in the URL fragment — without this, that
+    // fragment is never read, no session is ever established, and the root layout's guard then
+    // sees `signedOut` and bounces to the landing page instead of `complete-profile`. No URL
+    // fragment exists on native, so it's a no-op there; gated anyway to keep native behaviour
+    // exactly as before.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 

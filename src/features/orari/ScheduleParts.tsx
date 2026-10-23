@@ -50,7 +50,7 @@ export function ScheduleHeader({ gymName, subtitle }: { gymName: string; subtitl
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: 4 }}>
       <View style={{ gap: 4, flexShrink: 1 }}>
-        <PageTitle icon={ClockIcon} label={t('schedule.title')} circleSize={28} fontSize={36} />
+        <PageTitle icon={ClockIcon} label={t('schedule.title')} circleSize={22} fontSize={26} />
         <AppText muted style={{ fontSize: 13, lineHeight: 17 }}>
           {(subtitle ?? t('schedule.subtitle')).replace(/\.$/, '')}
         </AppText>

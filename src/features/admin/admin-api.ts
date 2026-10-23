@@ -9,8 +9,13 @@ export interface AdminOverview {
   sitesSuspended: number;
   managersTotal: number;
   managersActive: number;
-  /** New Managers who picked a plan and are waiting for approval before they can create their gym. */
+  /** Legacy pending Managers from before self-registration moved to Owner — almost always 0 now,
+   * kept only so any such leftover account still surfaces somewhere. Real pending approvals are
+   * `ownersPending` below. */
   managersPending: number;
+  /** New Owners who picked a plan and are waiting for approval before their business (gym_chains row,
+   * created automatically at approval — see admin_set_profile_status()) exists. */
+  ownersPending: number;
   checkinsToday: number;
 }
 
@@ -24,6 +29,7 @@ export async function getOverview(): Promise<AdminOverview> {
     managersTotal: data.managers_total,
     managersActive: data.managers_active,
     managersPending: data.managers_pending,
+    ownersPending: data.owners_pending,
     checkinsToday: data.checkins_today,
   };
 }
@@ -182,8 +188,8 @@ export async function setOwnerStatus(userId: string, status: 'active' | 'rejecte
   if (error) throw error;
 }
 
-/** New Owner signups: a plan was picked, no business exists yet — waiting for this approval before
- * `create_owner_chain` is even callable. Owner's equivalent of the old `getPendingManagers()`. */
+/** New Owner signups: a plan was picked, waiting for this approval — which also creates their
+ * `gym_chains` row (`admin_set_profile_status()`). Owner's equivalent of the old `getPendingManagers()`. */
 export async function getPendingOwners(): Promise<PendingManager[]> {
   const { data, error } = await supabase
     .from('profiles')
@@ -193,6 +199,33 @@ export async function getPendingOwners(): Promise<PendingManager[]> {
     .order('created_at', { ascending: true });
   if (error) throw error;
   return data.map((m) => ({ userId: m.id, fullName: m.full_name, requestedPlan: m.requested_plan, createdAt: m.created_at }));
+}
+
+export interface AdminOwnerRow {
+  ownerId: string;
+  fullName: string | null;
+  email: string;
+  chainName: string | null;
+  plan: SitePlan | null;
+  managersCount: number;
+  createdAt: string;
+}
+
+/** The roster of already-approved Owners (never pending ones — those are `getPendingOwners()`'s own
+ * queue) — how many Managers each one's chain actually has, the thing Admin had no visibility into
+ * before. */
+export async function getOwners(): Promise<AdminOwnerRow[]> {
+  const { data, error } = await supabase.rpc('admin_get_owners');
+  if (error) throw error;
+  return data.map((o) => ({
+    ownerId: o.owner_id,
+    fullName: o.full_name,
+    email: o.email,
+    chainName: o.chain_name,
+    plan: o.plan,
+    managersCount: o.managers_count,
+    createdAt: o.created_at,
+  }));
 }
 
 // ── Dashboard growth chart ──────────────────────────────────────────────
@@ -206,26 +239,6 @@ export async function getSitesGrowth(months = 6): Promise<MonthCount[]> {
   const { data, error } = await supabase.rpc('admin_get_sites_growth', { p_months: months });
   if (error) throw error;
   return data.map((r) => ({ monthKey: r.month_key, count: r.count }));
-}
-
-// ── Comunicazioni — Admin → Manager only, in-app (push doesn't work in Expo Go) ───────────────
-
-export interface Broadcast {
-  id: number;
-  title: string;
-  body: string;
-  createdAt: string;
-}
-
-export async function getBroadcasts(): Promise<Broadcast[]> {
-  const { data, error } = await supabase.from('broadcasts').select('id, title, body, created_at').order('created_at', { ascending: false });
-  if (error) throw error;
-  return data.map((b) => ({ id: b.id, title: b.title, body: b.body, createdAt: b.created_at }));
-}
-
-export async function createBroadcast(title: string, body: string): Promise<void> {
-  const { error } = await supabase.rpc('admin_create_broadcast', { p_title: title, p_body: body });
-  if (error) throw error;
 }
 
 // ── Admin actions log — Dashboard "Ultime azioni Admin" + its full "Vedi tutto" log ───────────

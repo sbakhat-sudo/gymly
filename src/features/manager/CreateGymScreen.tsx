@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
-import { DumbbellIcon } from '@/components/icons';
+import { ChevronLeftIcon, DumbbellIcon } from '@/components/icons';
 import { FadeSlideIn } from '@/components/FadeSlideIn';
 import { Screen } from '@/components/Screen';
 import { useI18n } from '@/lib/i18n';
@@ -16,7 +16,7 @@ import { createGym } from './manager-api';
  * generic Coach/Client `RoleAndSiteForm`) so it can be designed specifically for this one-time,
  * important moment — a clean entrance animation and a single focused card, not a plain form.
  */
-export function CreateGymScreen({ onDone }: { onDone: () => void }) {
+export function CreateGymScreen({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
   const { t } = useI18n();
   const theme = useTheme();
   const [name, setName] = useState('');
@@ -57,6 +57,30 @@ export function CreateGymScreen({ onDone }: { onDone: () => void }) {
   return (
     <Screen>
       <View style={{ paddingTop: spacing.xxl * 1.5, gap: spacing.xl }}>
+        {/* This screen is only reached with a real session already open (an Admin-approved Manager
+            with no gym yet) — a plain back/navigate would just get bounced right back here by the
+            root layout's guards, so the only real way out is to sign out, same pattern as
+            complete-profile.tsx's own generic fallback branch. */}
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          style={{
+            flexDirection: 'row',
+            alignSelf: 'flex-start',
+            alignItems: 'center',
+            gap: 6,
+            minHeight: MIN_TAP,
+            paddingHorizontal: spacing.md,
+            borderRadius: MIN_TAP / 2,
+            backgroundColor: theme.surfaceAlt,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+          }}>
+          <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
+          <AppText style={{ fontWeight: '700', fontSize: 15 }}>{t('common.back')}</AppText>
+        </Pressable>
+
         <FadeSlideIn>
           <View style={{ alignItems: 'center', gap: spacing.md }}>
             <View

@@ -1,7 +1,8 @@
 import * as Crypto from 'expo-crypto';
 
 export interface ChargeInput {
-  planType: 'monthly' | 'annual';
+  planName: string;
+  priceEur: number;
 }
 
 export interface ChargeResult {
@@ -10,7 +11,7 @@ export interface ChargeResult {
 }
 
 /**
- * Mock payment behind the same shape a real gateway call would have ({planType} in,
+ * Mock payment behind the same shape a real gateway call would have ({planName, priceEur} in,
  * {success, reference} out) — nothing here touches money, there is no payment processor in this
  * project (see CLAUDE.md's pinned-dependency rule, and AdminPagamentoScreen.tsx's own mocked billing
  * UI for the same reasoning). Swapping this for a real gateway (Stripe, etc.) later only ever means

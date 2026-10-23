@@ -122,7 +122,7 @@ export function SettingsScreen() {
   return (
     <Screen>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
-        <PageTitle icon={SlidersIcon} label={t('settings.title')} circleSize={28} fontSize={36} />
+        <PageTitle icon={SlidersIcon} label={t('settings.title')} circleSize={22} fontSize={26} />
         <SignOutButton />
       </View>
 

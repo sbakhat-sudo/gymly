@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { decorativeA11yProps } from '@/lib/a11y';
@@ -53,35 +53,38 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose, childr
             style={{
               width: '100%',
               maxWidth: 520,
+              // Caps the sheet itself, not just its content, so a form with many fields (e.g. the
+              // Manager's plan-card editor) gets an internal scroll instead of pushing its own title
+              // or action buttons off the top/bottom of the screen with no way to reach them.
+              maxHeight: '88%',
               alignSelf: 'center',
               backgroundColor: theme.surface,
               borderRadius: radius.sheet,
               borderWidth: 1,
               borderColor: theme.border,
-              paddingTop: 14,
-              paddingHorizontal: 22,
-              paddingBottom: 22,
-              gap: spacing.sm,
+              overflow: 'hidden',
             }}>
-            <View
-              {...decorativeA11yProps}
-              style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.borderStrong, alignSelf: 'center', marginBottom: 6 }}
-            />
-            <AppText accessibilityRole="header" style={{ fontFamily: fontFamily.display, fontSize: 20, lineHeight: 25, letterSpacing: -0.04 * 20 }}>
-              {title}
-            </AppText>
-            {subtitle ? (
-              <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
-                {subtitle}
+            <ScrollView contentContainerStyle={{ paddingTop: 14, paddingHorizontal: 22, paddingBottom: 22, gap: spacing.sm }} showsVerticalScrollIndicator={false}>
+              <View
+                {...decorativeA11yProps}
+                style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.borderStrong, alignSelf: 'center', marginBottom: 6 }}
+              />
+              <AppText accessibilityRole="header" style={{ fontFamily: fontFamily.display, fontSize: 20, lineHeight: 25, letterSpacing: -0.04 * 20 }}>
+                {title}
               </AppText>
-            ) : null}
-            {children}
-            <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-              {actions.map((a) => (
-                <Button key={a.label} label={a.label} onPress={a.onPress} disabled={a.disabled} variant={a.destructive ? 'danger' : 'secondary'} style={{ minHeight: 52 }} />
-              ))}
-              <Button label={t('common.cancel')} onPress={onClose} variant="secondary" style={{ minHeight: 52 }} />
-            </View>
+              {subtitle ? (
+                <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
+                  {subtitle}
+                </AppText>
+              ) : null}
+              {children}
+              <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+                {actions.map((a) => (
+                  <Button key={a.label} label={a.label} onPress={a.onPress} disabled={a.disabled} variant={a.destructive ? 'danger' : 'secondary'} style={{ minHeight: 52 }} />
+                ))}
+                <Button label={t('common.cancel')} onPress={onClose} variant="secondary" style={{ minHeight: 52 }} />
+              </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>

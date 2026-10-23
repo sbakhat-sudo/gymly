@@ -9,9 +9,9 @@ type ProfileStatus = 'pending' | 'active' | 'rejected';
 interface Profile {
   role: UserRole;
   siteId: string | null;
-  /** Set once an approved Owner creates their gym_chains row (create_owner_chain()) — same role for
-   * Owner that siteId already plays for Manager: "hasn't created their own business yet" is this
-   * being null, not a separate status. */
+  /** Set the moment Admin approves the Owner (admin_set_profile_status() creates the gym_chains row
+   * right then, with a default name) — same role for Owner that siteId already plays for Manager:
+   * "has no business yet" is this being null, not a separate status. */
   chainId: string | null;
   status: ProfileStatus;
   fullName: string | null;

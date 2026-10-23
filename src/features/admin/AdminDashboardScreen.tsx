@@ -23,11 +23,10 @@ import { AdminActionRow } from './AdminActionRow';
 import {
   getActionsLog,
   getOverview,
-  getPendingManagers,
+  getPendingOwners,
   getSites,
   getSitesGrowth,
-  setManagerStatus,
-  setSiteStatus,
+  setOwnerStatus,
   type AdminSite,
   type MonthCount,
   type PendingManager,
@@ -74,39 +73,26 @@ export function AdminDashboardScreen() {
   const router = useRouter();
   const overview = useAsync(() => getOverview(), []);
   const sites = useAsync(() => getSites(), []);
-  const pendingManagers = useAsync(() => getPendingManagers(), []);
+  const pendingOwners = useAsync(() => getPendingOwners(), []);
   const growth = useAsync(() => getSitesGrowth(12), []);
   const actionsLog = useAsync(() => getActionsLog(12), []);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [actionTab, setActionTab] = useState<'sites' | 'managers'>('sites');
   const isSidebar = useSidebarMode();
   // This screen's own header (icon + title + subtitle + pending-approvals bell) is custom, not the
   // shared `PageTitle`/`ScreenHeader` — kept as-is below for narrow/native. Sidebar mode's fixed
   // `RoleTopBar` still needs a title while this tab is active.
   usePageHeader(PulseIcon, t('admin.dashboard.title'));
 
-  const pending = sites.data?.filter((s) => s.approvalStatus === 'pending_approval') ?? [];
-
   function reloadAll(): void {
     overview.reload();
     sites.reload();
-    pendingManagers.reload();
+    pendingOwners.reload();
   }
 
-  async function approveSite(site: AdminSite): Promise<void> {
-    setBusyId(site.siteId);
+  async function approveOwner(owner: PendingManager): Promise<void> {
+    setBusyId(owner.userId);
     try {
-      await setSiteStatus(site.siteId, 'active');
-      reloadAll();
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function approveManager(manager: PendingManager): Promise<void> {
-    setBusyId(manager.userId);
-    try {
-      await setManagerStatus(manager.userId, 'active');
+      await setOwnerStatus(owner.userId, 'active');
       reloadAll();
     } finally {
       setBusyId(null);
@@ -127,9 +113,9 @@ export function AdminDashboardScreen() {
             </AppText>
           </View>
           <NotificationBell
-            count={(overview.data?.sitesPending ?? 0) + (overview.data?.managersPending ?? 0)}
+            count={overview.data?.ownersPending ?? 0}
             onPress={() => router.push('/(admin)/manager')}
-            accessibilityLabel={(overview.data?.sitesPending ?? 0) + (overview.data?.managersPending ?? 0) > 0 ? t('admin.dashboard.pendingApprovals') : t('admin.dashboard.title')}
+            accessibilityLabel={(overview.data?.ownersPending ?? 0) > 0 ? t('admin.dashboard.pendingApprovals') : t('admin.dashboard.title')}
           />
         </View>
       ) : null}
@@ -140,16 +126,7 @@ export function AdminDashboardScreen() {
         <FadeSlideIn>
           <View style={{ gap: spacing.sm }}>
             <GroupHeader icon={InboxIcon} label={t('admin.dashboard.group.action')} />
-            <ActionHeroCard
-              sitesPending={pending}
-              managersPending={pendingManagers.data ?? []}
-              tab={actionTab}
-              onTabChange={setActionTab}
-              busyId={busyId}
-              onApproveSite={approveSite}
-              onApproveManager={approveManager}
-              onSeeAll={() => router.push('/(admin)/manager')}
-            />
+            <ActionHeroCard ownersPending={pendingOwners.data ?? []} busyId={busyId} onApproveOwner={approveOwner} onSeeAll={() => router.push('/(admin)/manager')} />
           </View>
         </FadeSlideIn>
       ) : null}
@@ -268,27 +245,19 @@ export function AdminDashboardScreen() {
  * where every pending item already has its own detail sheet — no need to duplicate that here).
  */
 function ActionHeroCard({
-  sitesPending,
-  managersPending,
-  tab,
-  onTabChange,
+  ownersPending,
   busyId,
-  onApproveSite,
-  onApproveManager,
+  onApproveOwner,
   onSeeAll,
 }: {
-  sitesPending: AdminSite[];
-  managersPending: PendingManager[];
-  tab: 'sites' | 'managers';
-  onTabChange: (tab: 'sites' | 'managers') => void;
+  ownersPending: PendingManager[];
   busyId: string | null;
-  onApproveSite: (site: AdminSite) => void;
-  onApproveManager: (manager: PendingManager) => void;
+  onApproveOwner: (owner: PendingManager) => void;
   onSeeAll: () => void;
 }) {
   const { t } = useI18n();
   const theme = useTheme();
-  const total = sitesPending.length + managersPending.length;
+  const total = ownersPending.length;
 
   return (
     // `backgroundColor` here is a deliberate fallback, not decoration: the gradient below is an SVG
@@ -331,78 +300,21 @@ function ActionHeroCard({
         {total}
       </AppText>
 
-      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-        {(
-          [
-            { key: 'sites' as const, icon: DumbbellIcon, label: t('admin.dashboard.action.tab.sites', { n: sitesPending.length }) },
-            { key: 'managers' as const, icon: UsersIcon, label: t('admin.dashboard.action.tab.managers', { n: managersPending.length }) },
-          ] as const
-        ).map((opt) => {
-          const selected = opt.key === tab;
-          const OptIcon = opt.icon;
-          return (
-            <Pressable
-              key={opt.key}
-              onPress={() => onTabChange(opt.key)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected, checked: selected }}
-              accessibilityLabel={opt.label}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                minHeight: 36,
-                paddingHorizontal: 14,
-                borderRadius: radius.pill,
-                backgroundColor: selected ? theme.surface : 'transparent',
-                borderWidth: selected ? 0 : 1.5,
-                borderColor: 'rgba(255,255,255,0.55)',
-              }}>
-              <OptIcon color={selected ? theme.primary : theme.onPrimary} size={14} />
-              <AppText color={selected ? theme.text : theme.onPrimary} style={{ fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
-                {opt.label}
-              </AppText>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {tab === 'sites' ? (
-        sitesPending.length === 0 ? (
-          <AppText color={theme.onPrimary} style={{ opacity: 0.85, fontSize: 14 }}>
-            {t('admin.dashboard.action.empty.sites')}
-          </AppText>
-        ) : (
-          <View style={{ gap: spacing.sm }}>
-            {sitesPending.slice(0, 3).map((s) => (
-              <RequestRow
-                key={s.siteId}
-                icon={DumbbellIcon}
-                title={s.name}
-                subtitle={t('admin.dashboard.action.request.site')}
-                createdAt={s.createdAt}
-                busy={busyId === s.siteId}
-                onApprove={() => onApproveSite(s)}
-                onDetails={onSeeAll}
-              />
-            ))}
-          </View>
-        )
-      ) : managersPending.length === 0 ? (
+      {ownersPending.length === 0 ? (
         <AppText color={theme.onPrimary} style={{ opacity: 0.85, fontSize: 14 }}>
-          {t('admin.dashboard.action.empty.managers')}
+          {t('admin.dashboard.action.empty.owners')}
         </AppText>
       ) : (
         <View style={{ gap: spacing.sm }}>
-          {managersPending.slice(0, 3).map((m) => (
+          {ownersPending.slice(0, 3).map((o) => (
             <RequestRow
-              key={m.userId}
+              key={o.userId}
               icon={UsersIcon}
-              title={m.fullName ?? t('common.unnamedPerson')}
-              subtitle={t('admin.dashboard.action.request.manager')}
-              createdAt={m.createdAt}
-              busy={busyId === m.userId}
-              onApprove={() => onApproveManager(m)}
+              title={o.fullName ?? t('common.unnamedPerson')}
+              subtitle={t('admin.dashboard.action.request.owner')}
+              createdAt={o.createdAt}
+              busy={busyId === o.userId}
+              onApprove={() => onApproveOwner(o)}
               onDetails={onSeeAll}
             />
           ))}

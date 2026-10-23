@@ -32,8 +32,10 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
   const auth = useAuth();
   const [plan, setPlan] = useState<ManagerPlan | null>(initialPlan ?? null);
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
@@ -42,6 +44,10 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
     if (!plan) return;
     if (password.trim().length < 6) {
       setError(t('auth.signup.error.weakPassword'));
+      return;
+    }
+    if (password.trim() !== confirmPassword.trim()) {
+      setError(t('auth.signup.error.passwordMismatch'));
       return;
     }
     setBusy(true);
@@ -58,7 +64,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
       return;
     }
     if (data.session) {
-      const { error: rpcError } = await supabase.rpc('request_owner_signup', { p_plan: plan, p_full_name: fullName.trim() || null });
+      const { error: rpcError } = await supabase.rpc('request_owner_signup', { p_plan: plan, p_full_name: fullName.trim() || null, p_phone: phone.trim() || null });
       setBusy(false);
       if (rpcError) {
         setError(rpcError.message);
@@ -69,7 +75,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
     }
     // No session yet: email confirmation required first. Replayed once a session is available —
     // see complete-profile.tsx.
-    await storage.set('pendingOwnerPlan', { plan, fullName: fullName.trim() });
+    await storage.set('pendingOwnerPlan', { plan, fullName: fullName.trim(), phone: phone.trim() });
     setBusy(false);
     setAwaitingConfirmation(true);
   }
@@ -152,10 +158,30 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
                 textContentType="emailAddress"
               />
               <Field
+                label={t('auth.signup.phone')}
+                value={phone}
+                onChangeText={setPhone}
+                accessibilityLabel={t('auth.signup.phone')}
+                keyboardType="phone-pad"
+                autoComplete="tel"
+                textContentType="telephoneNumber"
+              />
+              <Field
                 label={t('auth.signup.password')}
                 value={password}
                 onChangeText={setPassword}
                 accessibilityLabel={t('auth.signup.password')}
+                secureTextEntry
+                autoCapitalize="none"
+                autoComplete="password-new"
+                textContentType="newPassword"
+                danger={error !== null}
+              />
+              <Field
+                label={t('auth.signup.confirmPassword')}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                accessibilityLabel={t('auth.signup.confirmPassword')}
                 secureTextEntry
                 autoCapitalize="none"
                 autoComplete="password-new"
@@ -204,9 +230,9 @@ function Field({
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   autoCorrect?: boolean;
-  keyboardType?: 'default' | 'email-address';
-  autoComplete?: 'email' | 'name' | 'password-new';
-  textContentType?: 'emailAddress' | 'name' | 'newPassword';
+  keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  autoComplete?: 'email' | 'name' | 'password-new' | 'tel';
+  textContentType?: 'emailAddress' | 'name' | 'newPassword' | 'telephoneNumber';
   returnKeyType?: 'done';
   onSubmitEditing?: () => void;
 }) {

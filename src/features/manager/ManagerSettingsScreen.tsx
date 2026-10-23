@@ -12,15 +12,12 @@ import { useAppState } from '@/lib/app-state';
 import { useI18n, type Lang } from '@/lib/i18n';
 import { usePageHeader } from '@/lib/page-header-context';
 import { spacing } from '@/lib/theme';
-import { useAsync } from '@/lib/use-async';
 
 import { ManagerNotifications } from './ManagerNotifications';
-import { getBroadcasts } from './manager-api';
 
 export function ManagerSettingsScreen() {
   const { t, lang } = useI18n();
   const { setLang } = useAppState();
-  const broadcasts = useAsync(() => getBroadcasts(), []);
   // This screen's own header is a plain text title (no icon) — kept as-is below for narrow/native.
   // Sidebar mode's fixed `RoleTopBar` still needs a title to show while this tab is active, so it
   // registers one with the same icon its sidebar tab uses.
@@ -37,21 +34,6 @@ export function ManagerSettingsScreen() {
         </View>
         <SignOutButton />
       </View>
-
-      {broadcasts.data && broadcasts.data.length > 0 ? (
-        <>
-          <SectionLabel>{t('manager.broadcasts.title')}</SectionLabel>
-          {broadcasts.data.map((b) => (
-            <Card key={b.id}>
-              <AppText style={{ fontWeight: '700' }}>{b.title}</AppText>
-              <AppText style={{ fontSize: 14, lineHeight: 20 }}>{b.body}</AppText>
-              <AppText variant="caption" muted>
-                {new Date(b.createdAt).toLocaleDateString(lang)}
-              </AppText>
-            </Card>
-          ))}
-        </>
-      ) : null}
 
       <Card>
         <SectionLabel>{t('settings.language')}</SectionLabel>

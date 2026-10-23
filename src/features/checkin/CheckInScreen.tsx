@@ -52,7 +52,7 @@ function CheckInContent({ site }: { site: SiteSummary }) {
   return (
     <Screen orb={{ color: checkedIn ? theme.band.red.solid : theme.accent, top: 82, size: 360 }}>
       <View style={{ gap: 6 }}>
-        <PageTitle icon={LogInIcon} label={t('checkin.title')} circleSize={28} fontSize={36} />
+        <PageTitle icon={LogInIcon} label={t('checkin.title')} circleSize={22} fontSize={26} />
         <AppText muted style={{ fontSize: 14, lineHeight: 20 }}>
           {t('checkin.subtitle')}
         </AppText>
