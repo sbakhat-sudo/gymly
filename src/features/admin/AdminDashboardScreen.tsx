@@ -109,7 +109,7 @@ export function AdminDashboardScreen() {
           <View style={{ gap: 4, flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <IconBadge icon={PulseIcon} tint={theme.primary} size={32} />
-              <AppText style={{ fontFamily: fontFamily.display, fontSize: 32, lineHeight: 36, letterSpacing: 32 * -0.03 }}>{t('admin.dashboard.title')}</AppText>
+              <AppText style={{ fontFamily: fontFamily.displaySemi, fontSize: 24, lineHeight: 29, letterSpacing: 24 * -0.04 }}>{t('admin.dashboard.title')}</AppText>
             </View>
             <AppText muted style={{ fontSize: 14 }}>
               {t('admin.dashboard.subtitle')}

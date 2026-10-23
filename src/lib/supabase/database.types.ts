@@ -62,6 +62,11 @@ export interface Database {
           first_name: string | null;
           last_name: string | null;
           birth_year: number | null;
+          /** Full birth date + home address, asked once in the mandatory first-login profile (staff only). */
+          birth_date: string | null;
+          home_address: string | null;
+          /** Set by complete_my_profile() — null means the first-login profile popup is still owed. */
+          profile_completed_at: string | null;
           location_always: boolean;
           /** A Manager's plan choice at signup, applied to the site they eventually create once Admin-approved. */
           requested_plan: 'trial' | 'pro' | 'business' | null;
@@ -480,6 +485,41 @@ export interface Database {
           plan_paid_until: string | null;
           plan_grace_end: string | null;
         }[];
+      };
+      complete_my_profile: {
+        Args: { p_first_name: string; p_last_name: string; p_birth_date: string; p_home_address: string };
+        Returns: undefined;
+      };
+      chat_open_conversation: {
+        Args: { p_other_id: string };
+        Returns: string;
+      };
+      chat_get_my_owner: {
+        Args: Record<string, never>;
+        Returns: { owner_id: string; owner_name: string | null }[];
+      };
+      chat_get_conversations: {
+        Args: Record<string, never>;
+        Returns: {
+          conversation_id: string;
+          other_id: string;
+          other_name: string | null;
+          last_body: string | null;
+          last_at: string;
+          unread_count: number;
+        }[];
+      };
+      chat_get_messages: {
+        Args: { p_conversation_id: string; p_limit?: number };
+        Returns: { id: number; sender_id: string; body: string; created_at: string; read_at: string | null }[];
+      };
+      chat_send_message: {
+        Args: { p_conversation_id: string; p_body: string };
+        Returns: undefined;
+      };
+      chat_mark_read: {
+        Args: { p_conversation_id: string };
+        Returns: undefined;
       };
       admin_mark_owner_paid: {
         Args: { p_owner_id: string; p_months?: number };

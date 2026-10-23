@@ -20,6 +20,7 @@ import { AppProviders } from '@/lib/app-providers';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { logger } from '@/lib/logger';
+import { CompleteProfileGate } from '@/features/profile/CompleteProfileGate';
 import { cancelPaymentWarning, schedulePaymentWarning } from '@/lib/notifications';
 import { PermissionsProvider, usePermissionsState } from '@/lib/permissions-context';
 import { createServices } from '@/lib/services';
@@ -291,6 +292,8 @@ function NavigatorStack({
         <Stack.Screen name="redemption/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="feedback/[checkinId]" options={{ presentation: 'modal' }} />
       </Stack>
+      {/* Mandatory first-login profile for Owner/Manager/Coach — a popup over whatever they land on. */}
+      <CompleteProfileGate />
       {demo ? <DemoBanner /> : null}
     </ThemeProvider>
   );

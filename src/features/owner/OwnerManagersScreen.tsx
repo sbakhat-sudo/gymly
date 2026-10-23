@@ -9,6 +9,8 @@ import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { CheckIcon, ChevronLeftIcon, MapPinIcon, MessageCircleIcon, PlusIcon, UsersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
+import { ChatModal } from '@/features/chat/ChatModal';
+import { getConversations, openConversation } from '@/features/chat/chat-api';
 import { Pagination } from '@/components/TablePagination';
 import { avatarTint } from '@/lib/avatar-tint';
 import { useI18n } from '@/lib/i18n';
@@ -251,14 +253,13 @@ function ClientRow({ client }: { client: OwnerClient }) {
 
 /** Dettaglio Manager — clients/coaches/location/payment summary for one Manager's site, as an
  * in-screen popup, same convention as Admin's per-site sheet (no separate route). Strictly
- * read-only: viewing + messaging the Manager (WhatsApp) are the only two things the Owner can do
+ * read-only: viewing + messaging the Manager (in-app chat) are the only two things the Owner can do
  * here, by explicit product decision — no editing of anything shown. */
-function ManagerDetailModal({ row, onClose }: { row: OwnerManagerRow | null; onClose: () => void }) {
+function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow | null; onClose: () => void; onMessage: () => void }) {
   const { t } = useI18n();
   const theme = useTheme();
   const managerId = row?.managerId ?? null;
   const detail = useAsync<OwnerManagerDetail | null>(() => (managerId ? getOwnerManagerDetail(managerId) : Promise.resolve(null)), [managerId], managerId !== null);
-  const canMessage = sanitizePhoneDigits(row?.phone ?? '').length > 0;
   const clients = detail.data?.clients ?? [];
   const coaches = detail.data?.coaches ?? [];
   // Computed here, not a separate RPC round-trip — `owner_get_manager_detail` already returns every
@@ -287,8 +288,7 @@ function ManagerDetailModal({ row, onClose }: { row: OwnerManagerRow | null; onC
           </View>
 
           <Pressable
-            onPress={() => canMessage && openExternalUrl(`https://wa.me/${sanitizePhoneDigits(row?.phone ?? '')}`)}
-            disabled={!canMessage}
+            onPress={onMessage}
             accessibilityRole="button"
             accessibilityLabel={t('owner.managers.message')}
             style={{
@@ -298,11 +298,10 @@ function ManagerDetailModal({ row, onClose }: { row: OwnerManagerRow | null; onC
               gap: 6,
               minHeight: MIN_TAP,
               borderRadius: radius.pill,
-              backgroundColor: canMessage ? theme.primary : theme.surfaceAlt,
-              opacity: canMessage ? 1 : 0.5,
+              backgroundColor: theme.primary,
             }}>
-            <MessageCircleIcon color={canMessage ? theme.onPrimary : theme.textMuted} size={16} />
-            <AppText style={{ color: canMessage ? theme.onPrimary : theme.textMuted, fontWeight: '700', fontSize: 14 }}>{t('owner.managers.message')}</AppText>
+            <MessageCircleIcon color={theme.onPrimary} size={16} />
+            <AppText style={{ color: theme.onPrimary, fontWeight: '700', fontSize: 14 }}>{t('owner.managers.message')}</AppText>
           </Pressable>
 
           {detail.loading && !detail.data ? <ActivityIndicator /> : null}
@@ -397,17 +396,12 @@ function ManagerDetailModal({ row, onClose }: { row: OwnerManagerRow | null; onC
   );
 }
 
-function sanitizePhoneDigits(raw: string): string {
-  return raw.replace(/\D/g, '');
-}
-
 /** Vertical card (not a table row) — avatar initials, address, client count, a dedicated "Messaggio"
- * action straight to the Manager's real WhatsApp number (saved at creation time). Tapping the card
+ * action that opens the in-app conversation with that Manager. Tapping the card
  * body elsewhere opens the full detail sheet (clients/coaches/map/payments). */
-function ManagerCard({ row, onOpenDetail }: { row: OwnerManagerRow; onOpenDetail: () => void }) {
+function ManagerCard({ row, unread, onOpenDetail, onMessage }: { row: OwnerManagerRow; unread: number; onOpenDetail: () => void; onMessage: () => void }) {
   const { t } = useI18n();
   const theme = useTheme();
-  const canMessage = sanitizePhoneDigits(row.phone ?? '').length > 0;
 
   return (
     <View
@@ -459,10 +453,9 @@ function ManagerCard({ row, onOpenDetail }: { row: OwnerManagerRow; onOpenDetail
         </View>
       </Pressable>
       <Pressable
-        onPress={() => canMessage && openExternalUrl(`https://wa.me/${sanitizePhoneDigits(row.phone ?? '')}`)}
-        disabled={!canMessage}
+        onPress={onMessage}
         accessibilityRole="button"
-        accessibilityLabel={t('owner.managers.message')}
+        accessibilityLabel={unread > 0 ? `${t('owner.managers.message')}, ${t('owner.managers.unread', { n: unread })}` : t('owner.managers.message')}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -470,11 +463,16 @@ function ManagerCard({ row, onOpenDetail }: { row: OwnerManagerRow; onOpenDetail
           minHeight: MIN_TAP - 4,
           paddingHorizontal: spacing.md,
           borderRadius: radius.pill,
-          backgroundColor: canMessage ? theme.primary : theme.surfaceAlt,
-          opacity: canMessage ? 1 : 0.5,
+          backgroundColor: theme.primary,
         }}>
-        <MessageCircleIcon color={canMessage ? theme.onPrimary : theme.textMuted} size={15} />
-        <AppText style={{ color: canMessage ? theme.onPrimary : theme.textMuted, fontWeight: '700', fontSize: 13 }}>{t('owner.managers.message')}</AppText>
+        <MessageCircleIcon color={theme.onPrimary} size={15} />
+        <AppText style={{ color: theme.onPrimary, fontWeight: '700', fontSize: 13 }}>{t('owner.managers.message')}</AppText>
+        {unread > 0 ? (
+          // A number, not just a coloured dot — never colour alone.
+          <View style={{ minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.onPrimary }}>
+            <AppText style={{ color: theme.primary, fontWeight: '700', fontSize: 11.5 }}>{unread}</AppText>
+          </View>
+        ) : null}
       </Pressable>
     </View>
   );
@@ -484,10 +482,28 @@ export function OwnerManagersScreen() {
   const { t } = useI18n();
   const theme = useTheme();
   const managers = useAsync(() => getOwnerManagers(), []);
+  const conversations = useAsync(() => getConversations(), []);
+  // Unread messages per Manager (keyed by the Manager's profile id), so a reply never goes unnoticed.
+  const unreadByManager = new Map((conversations.data ?? []).map((c) => [c.otherId, c.unreadCount]));
   const [page, setPage] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<OwnerManagerRow | null>(null);
+  const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
+  const [chatError, setChatError] = useState(false);
   usePageHeader(UsersIcon, t('owner.managers.title'));
+
+  // Opens (creating it the first time) the conversation with this Manager — works for every Manager,
+  // with or without a saved phone number, which the old WhatsApp-only button needed.
+  async function openChat(row: OwnerManagerRow): Promise<void> {
+    setChatError(false);
+    try {
+      const id = await openConversation(row.managerId);
+      setDetailRow(null);
+      setChat({ id, title: row.fullName || t('common.unnamedPerson') });
+    } catch {
+      setChatError(true);
+    }
+  }
 
   const rows = managers.data ?? [];
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -496,7 +512,12 @@ export function OwnerManagersScreen() {
   const pageRows = rows.slice(pageStart, pageStart + PAGE_SIZE);
 
   return (
-    <Screen onRefresh={managers.reload} refreshing={managers.loading && managers.data !== undefined}>
+    <Screen
+      onRefresh={() => {
+        managers.reload();
+        conversations.reload();
+      }}
+      refreshing={managers.loading && managers.data !== undefined}>
       <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
         <View style={{ gap: 2, flex: 1 }}>
           <AppText style={{ fontFamily: fontFamily.display, fontSize: 26 }}>{t('owner.managers.title')}</AppText>
@@ -514,13 +535,14 @@ export function OwnerManagersScreen() {
       </View>
 
       {managers.error ? <Banner title={t('owner.managers.error')} /> : null}
+      {chatError ? <Banner title={t('owner.managers.message.error')} /> : null}
       {managers.data === undefined && managers.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
       {managers.data && rows.length === 0 ? <Banner message={t('owner.managers.empty')} /> : null}
 
       {pageRows.length > 0 ? (
         <View style={{ gap: spacing.sm }}>
           {pageRows.map((row) => (
-            <ManagerCard key={row.managerId} row={row} onOpenDetail={() => setDetailRow(row)} />
+            <ManagerCard key={row.managerId} row={row} unread={unreadByManager.get(row.managerId) ?? 0} onOpenDetail={() => setDetailRow(row)} onMessage={() => void openChat(row)} />
           ))}
         </View>
       ) : null}
@@ -535,7 +557,8 @@ export function OwnerManagersScreen() {
       ) : null}
 
       <AddManagerModal visible={addOpen} onClose={() => setAddOpen(false)} onCreated={() => managers.reload()} />
-      <ManagerDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
+      <ManagerDetailModal row={detailRow} onClose={() => setDetailRow(null)} onMessage={() => detailRow && void openChat(detailRow)} />
+      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} onClose={() => setChat(null)} onChanged={conversations.reload} />
     </Screen>
   );
 }

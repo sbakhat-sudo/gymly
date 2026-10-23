@@ -44,12 +44,17 @@ export function Screen({ children, onRefresh, refreshing = false, orb, maxWidth,
   const resolvedMaxWidth = maxWidth ?? (sidebarInset > 0 ? undefined : 720);
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: theme.background, paddingLeft: sidebarInset }}
+      // The sidebar inset must NOT live here: with `refreshControl`, react-native-web hands this same `style`
+      // to both the RefreshControl wrapper and the inner ScrollView, so the inset was applied twice (an extra
+      // sidebar-width of blank space on exactly the pages that pull to refresh). It is part of the content
+      // padding below instead, which is applied once, the same way on every page.
+      style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{
         // Sidebar mode (Manager/Coach/Admin web) also has a `RoleTopBar` fixed above the content —
         // extra room so scrolling content starts below it instead of underneath it.
         paddingTop: insets.top + spacing.md + (sidebarInset > 0 ? ROLE_TOP_BAR_HEIGHT + spacing.lg + spacing.md : 0),
-        paddingHorizontal: spacing.lg,
+        paddingLeft: spacing.lg + sidebarInset,
+        paddingRight: spacing.lg,
         paddingBottom: bottomPadding + insets.bottom,
         gap: 14,
         // Keeps the content readable on wide windows (tablet / web preview).

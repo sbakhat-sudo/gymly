@@ -1,9 +1,10 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { useState, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, View, type ViewStyle } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Animated, Easing, Platform, Pressable, ScrollView, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/lib/auth/auth-context';
+import { useReduceMotion } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { radius, spacing, useTheme } from '@/lib/theme';
 import { SIDEBAR_WIDTH, useSidebarMode } from '@/lib/use-sidebar-mode';
@@ -102,11 +103,43 @@ function Pill({ state, descriptors, navigation, insets }: BottomTabBarProps) {
   );
 }
 
+/** The hover name pill: fades and slides in from the icon. Opacity + transform only, so it runs
+ * without touching layout (nothing else on the page moves or re-measures while it plays). */
+function HoverLabel({ label }: { label: string }) {
+  const reduceMotion = useReduceMotion();
+  const [progress] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    Animated.timing(progress, { toValue: 1, duration: reduceMotion ? 0 : 170, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [progress, reduceMotion]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: 'absolute',
+          left: 66,
+          top: '50%',
+          marginTop: -17,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          borderRadius: radius.sm,
+          backgroundColor: '#000000',
+          opacity: progress,
+          transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
+        },
+        tooltipGlow(),
+      ]}>
+      <AppText color="#FFFFFF" numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', letterSpacing: -0.2 }}>
+        {label}
+      </AppText>
+    </Animated.View>
+  );
+}
+
 /** One icon button in the sidebar: on hover (web only — native ignores `onHoverIn`/`onHoverOut`),
- * shows the section's name in a filled pill to its right so the column can stay icon-only and
- * slim. (It can't go to the left instead — the sidebar already sits right at the screen's own left
- * edge, with only ~16px of margin, nowhere near enough room for a label-width pill to fit before
- * running off-screen.) */
+ * shows the section's name in a pill to its right (`HoverLabel`) so the column can stay icon-only
+ * and slim. (It can't go to the left instead — the sidebar already sits right at the screen's own
+ * left edge, nowhere near enough room for a label-width pill to fit before running off-screen.) */
 function SidebarItem({
   icon,
   label,
@@ -143,27 +176,7 @@ function SidebarItem({
         }}>
         {icon(color)}
       </Pressable>
-      {hovered ? (
-        <View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              left: 88,
-              top: '50%',
-              marginTop: -17,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: radius.sm,
-              backgroundColor: '#000000',
-            },
-            tooltipGlow(),
-          ]}>
-          <AppText color="#FFFFFF" numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', letterSpacing: -0.2 }}>
-            {label}
-          </AppText>
-        </View>
-      ) : null}
+      {hovered ? <HoverLabel label={label} /> : null}
     </View>
   );
 }
@@ -190,7 +203,7 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
         style={[
           {
             flex: 1,
-            margin: spacing.lg,
+            marginHorizontal: 10,
             marginTop: spacing.lg + insets.top,
             marginBottom: spacing.lg + insets.bottom,
             borderRadius: radius.xxl,
@@ -213,7 +226,7 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
             <View style={{ alignItems: 'center', gap: 4, marginBottom: spacing.md }}>
               <Avatar uri={profile.avatarUrl} name={profile.fullName} size={48} />
               {roleLabel ? (
-                <AppText variant="caption" muted style={{ fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                <AppText variant="caption" muted style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.2 }}>
                   {roleLabel}
                 </AppText>
               ) : null}

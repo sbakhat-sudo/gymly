@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { useTheme } from '@/lib/theme';
+import { fontFamily, useTheme } from '@/lib/theme';
 
 import { AppText, type TextVariant } from './AppText';
 
@@ -22,8 +22,8 @@ export function PageTitle({
   icon: Icon,
   label,
   variant = 'display',
-  circleSize = 32,
-  fontSize,
+  circleSize = 34,
+  fontSize = 24,
 }: {
   icon: IconType;
   label: string;
@@ -32,19 +32,24 @@ export function PageTitle({
   fontSize?: number;
 }) {
   const theme = useTheme();
-  const sizeOverride = fontSize ? { fontSize, lineHeight: Math.round(fontSize * 1.15), letterSpacing: fontSize * -0.05 } : null;
+  // Compact by default (24px, semibold) — the full 46px `display` scale read as far too big next to the
+  // sidebar and top bar on a wide web window. Same family as before, just lighter and smaller.
+  const sizeOverride = { fontFamily: fontFamily.displaySemi, fontSize, lineHeight: Math.round(fontSize * 1.2), letterSpacing: fontSize * -0.04 };
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: circleSize >= 32 ? 10 : 8 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: circleSize >= 32 ? 12 : 8 }}>
+      {/* A rounded square ("squircle") tile with a hairline tint border, not a flat circle. */}
       <View
         style={{
           width: circleSize,
           height: circleSize,
-          borderRadius: circleSize / 2,
+          borderRadius: Math.round(circleSize * 0.32),
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: `${theme.primary}22`,
+          backgroundColor: `${theme.primary}1A`,
+          borderWidth: 1,
+          borderColor: `${theme.primary}33`,
         }}>
-        <Icon color={theme.primary} size={Math.round(circleSize * 0.53)} />
+        <Icon color={theme.primary} size={Math.round(circleSize * 0.5)} />
       </View>
       <AppText variant={variant} accessibilityRole="header" style={[{ flexShrink: 1 }, sizeOverride]}>
         {label}

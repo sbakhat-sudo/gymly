@@ -11,8 +11,9 @@ import { SignOutButton } from '@/components/SignOutButton';
 import { useAppState } from '@/lib/app-state';
 import { useI18n, type Lang } from '@/lib/i18n';
 import { usePageHeader } from '@/lib/page-header-context';
-import { spacing } from '@/lib/theme';
+import { fontFamily, spacing } from '@/lib/theme';
 
+import { ManagerMessagesSection } from './ManagerMessagesSection';
 import { ManagerNotifications } from './ManagerNotifications';
 
 export function ManagerSettingsScreen() {
@@ -27,7 +28,7 @@ export function ManagerSettingsScreen() {
     <Screen>
       <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <AppText variant="display" style={{ fontSize: 32 }}>
+          <AppText variant="display" style={{ fontFamily: fontFamily.displaySemi, fontSize: 24, lineHeight: 29, letterSpacing: 24 * -0.04 }}>
             {t('settings.title')}
           </AppText>
           <ManagerNotifications />
@@ -47,6 +48,8 @@ export function ManagerSettingsScreen() {
           ]}
         />
       </Card>
+
+      <ManagerMessagesSection />
 
       <ProfileSection />
 

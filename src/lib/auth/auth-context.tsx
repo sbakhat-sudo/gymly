@@ -18,6 +18,9 @@ interface Profile {
   firstName: string | null;
   lastName: string | null;
   birthYear: number | null;
+  homeAddress: string | null;
+  /** null = the mandatory first-login profile popup (staff roles) hasn't been completed yet. */
+  profileCompletedAt: string | null;
   avatarUrl: string | null;
 }
 
@@ -48,7 +51,7 @@ const AuthContext = createContext<AuthValue | null>(null);
 async function fetchProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('role, site_id, chain_id, status, full_name, first_name, last_name, birth_year, avatar_url')
+    .select('role, site_id, chain_id, status, full_name, first_name, last_name, birth_year, home_address, profile_completed_at, avatar_url')
     .eq('id', userId)
     .maybeSingle();
   if (error) throw error;
@@ -65,6 +68,8 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     firstName: data.first_name,
     lastName: data.last_name,
     birthYear: data.birth_year,
+    homeAddress: data.home_address,
+    profileCompletedAt: data.profile_completed_at,
     avatarUrl: data.avatar_url,
   };
 }

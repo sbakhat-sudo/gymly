@@ -1,9 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { AlertTriangleIcon, InboxIcon } from '@/components/icons';
+import { AlertTriangleIcon, InboxIcon, MessageCircleIcon } from '@/components/icons';
 import { NotificationBell } from '@/components/NotificationBell';
 import { NotificationsSheet, type NotificationListItem } from '@/components/NotificationsSheet';
+import { ChatModal } from '@/features/chat/ChatModal';
+import { getConversations, type ChatConversation } from '@/features/chat/chat-api';
 import { useAuth } from '@/lib/auth/auth-context';
 import { formatDateKey } from '@/lib/domain/weekly-goal';
 import { useAppActive } from '@/lib/hooks';
@@ -19,10 +21,12 @@ const POLL_MS = 20_000;
 const SEEN_IDS_CAP = 500;
 
 /**
- * Everything that "arrives" for a Manager, in one place: new client signup requests and pending
- * (not yet resolved) issue reports — combined into one bell + a scrollable list (icon, title,
- * description, relative time, unread dot), with an explicit "Segna tutte lette" action and
- * All/Unread tabs (`NotificationsSheet`).
+ * Everything that "arrives" for a Manager, in one place: new client signup requests, pending
+ * (not yet resolved) issue reports and messages from their Owner — combined into one bell + a
+ * scrollable list (icon, title, description, relative time, unread dot), with an explicit "Segna tutte
+ * lette" action and All/Unread tabs (`NotificationsSheet`). A message opens the conversation right
+ * here, where the Manager can read and reply; its read state comes from the server (the other side's
+ * messages are marked read once the thread is opened), not from the local seen-ids below.
  *
  * "Read" is tracked per-item (`managerSeenNotificationIds`): the Manager can open an older one
  * after a newer one without that meaning everything older is now "seen" too, which a single
@@ -48,6 +52,8 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
 
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [issues, setIssues] = useState<ManagerIssueEntry[]>([]);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -86,6 +92,10 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
         (all) => alive && setIssues(all.filter((i) => i.status === 'pending')),
         () => undefined
       );
+      getConversations().then(
+        (c) => alive && setConversations(c),
+        () => undefined
+      );
     };
     load();
     const id = setInterval(load, POLL_MS);
@@ -97,7 +107,8 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
 
   const unreadRequests = requests.filter((r) => !seenIds.includes(`request-${r.userId}`));
   const unreadIssues = issues.filter((i) => !seenIds.includes(`issue-${i.id}`));
-  const totalCount = unreadRequests.length + unreadIssues.length;
+  const unreadChats = conversations.filter((c) => c.unreadCount > 0);
+  const totalCount = unreadRequests.length + unreadIssues.length + unreadChats.length;
 
   const items: NotificationListItem[] = [
     ...requests.map((r): NotificationListItem => {
@@ -126,10 +137,30 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
         onPress: () => goTo('/(manager)/issues', id, i.createdAt),
       };
     }),
+    ...conversations
+      // A conversation nobody has written in yet isn't news.
+      .filter((c) => c.lastBody !== null)
+      .map((c): NotificationListItem => ({
+        id: `chat-${c.conversationId}`,
+        icon: MessageCircleIcon,
+        tint: theme.primary,
+        title: t('manager.notifications.item.message', { name: c.otherName || t('common.unnamedPerson') }),
+        description: c.lastBody ?? undefined,
+        createdAt: c.lastAt,
+        read: c.unreadCount === 0,
+        onPress: () => {
+          setOpen(false);
+          setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson') });
+        },
+      })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   function markAllRead(): void {
     markSeen([...requests.map((r) => `request-${r.userId}`), ...issues.map((i) => `issue-${i.id}`)]);
+  }
+
+  function refreshConversations(): void {
+    getConversations().then(setConversations, () => undefined);
   }
 
   if (isSidebar && hideInSidebarMode) return null;
@@ -139,6 +170,8 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
       <NotificationBell count={totalCount} showCount onPress={() => setOpen(true)} accessibilityLabel={t('manager.notifications.title', { n: totalCount })} />
 
       <NotificationsSheet visible={open} onClose={() => setOpen(false)} items={items} onMarkAllRead={markAllRead} emptyLabel={t('manager.notifications.empty')} />
+
+      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} onClose={() => setChat(null)} onChanged={refreshConversations} />
     </>
   );
 }
