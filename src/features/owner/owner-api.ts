@@ -2,11 +2,24 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { supabase } from '@/lib/supabase/client';
 
+/** How many members are on one kind of plan, and what those subscriptions add up to. */
+export interface OwnerSubscriptionRow {
+  kind: 'monthly' | 'annual';
+  tier: 'normal' | 'vip' | 'vvip';
+  count: number;
+  revenueEur: number;
+}
+
 export interface OwnerOverview {
   managers: number;
   clients: number;
   coaches: number;
+  /** What the Owner's members actually pay: the sum of their currently active subscriptions. */
   revenueEur: number;
+  /** What the Owner's gyms cost on Gymly's own plans (pro/business) — a different number from the above. */
+  planCostEur: number;
+  /** Always six rows — Mensile/Annuale x Normale/VIP/VVIP, zeros included. */
+  subscriptions: OwnerSubscriptionRow[];
   activity7d: { day: string; count: number }[];
 }
 
@@ -14,7 +27,15 @@ export async function getOwnerOverview(): Promise<OwnerOverview> {
   const { data, error } = await supabase.rpc('owner_get_overview');
   if (error) throw error;
   const d = data as OwnerOverview;
-  return { managers: d.managers, clients: d.clients, coaches: d.coaches, revenueEur: d.revenueEur, activity7d: d.activity7d };
+  return {
+    managers: d.managers,
+    clients: d.clients,
+    coaches: d.coaches,
+    revenueEur: d.revenueEur,
+    planCostEur: d.planCostEur ?? 0,
+    subscriptions: d.subscriptions ?? [],
+    activity7d: d.activity7d,
+  };
 }
 
 /** The Owner's own app-plan payment state — `grace` means the automatic 3-day window is running;

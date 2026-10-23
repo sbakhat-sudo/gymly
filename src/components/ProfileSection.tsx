@@ -4,7 +4,9 @@ import { TextInput, View } from 'react-native';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase/client';
+import { getSiteName } from '@/lib/supabase/site-name';
 import { MIN_TAP, fontFamily, spacing, useTheme } from '@/lib/theme';
+import { useAsync } from '@/lib/use-async';
 
 import { AppText } from './AppText';
 import { Button } from './Button';
@@ -33,6 +35,8 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
   const [birthYear, setBirthYear] = useState(initialBirthYear);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<'success' | 'error' | 'invalidYear' | null>(null);
+  const siteId = auth.status === 'active' ? auth.profile.siteId : null;
+  const gymName = useAsync(() => (siteId ? getSiteName(siteId) : Promise.resolve(null)), [siteId], siteId !== null);
 
   if (auth.status !== 'active') return null;
 
@@ -91,6 +95,19 @@ export function ProfileSection({ includeBirthYear = false }: { includeBirthYear?
   return (
     <Card>
       <SectionTitle>{t('profile.title')}</SectionTitle>
+
+      {gymName.data ? (
+        <>
+          <AppText variant="caption" style={{ fontWeight: '600' }}>
+            {t('profile.gym')}
+          </AppText>
+          {/* Fixed: the Owner names the gym once, for everyone under them. */}
+          <TextInput value={gymName.data} editable={false} accessibilityLabel={t('profile.gym')} style={[inputStyle, { backgroundColor: theme.surfaceAlt, color: theme.textMuted }]} />
+          <AppText variant="caption" muted>
+            {t('profile.gym.hint')}
+          </AppText>
+        </>
+      ) : null}
 
       <AppText variant="caption" style={{ fontWeight: '600' }}>
         {t('profile.firstName')}

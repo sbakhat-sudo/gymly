@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Platform, View, type ViewStyle } from 'react-native';
+import { Animated, Easing, Modal, Platform, Pressable, View, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { FadeSlideIn } from '@/components/FadeSlideIn';
-import { CreditCardIcon, DumbbellIcon, PulseIcon, UsersIcon } from '@/components/icons';
+import { ChevronRightIcon, CreditCardIcon, DumbbellIcon, PulseIcon, UsersIcon, XIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { useReduceMotion } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { usePageHeader } from '@/lib/page-header-context';
-import { fontFamily, radius, spacing, useTheme } from '@/lib/theme';
+import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
-import { getOwnerOverview, getOwnerPlanBilling } from './owner-api';
+import { getOwnerOverview, getOwnerPlanBilling, type OwnerSubscriptionRow } from './owner-api';
 
 type IconType = (p: { color: string; size: number }) => React.ReactElement;
 
@@ -29,7 +29,8 @@ function IconBadge({ icon: Icon, tint, size = 34 }: { icon: IconType; tint: stri
 
 /** Same animated tile as Admin's KpiCard (AdminDashboardScreen.tsx) — kept local here since it has
  * no onPress drill-down target yet (Owner has no per-KPI detail screen the way Admin's do). */
-function KpiCard({ index, icon, tint, label, value }: { index: number; icon: IconType; tint: string; label: string; value: string }) {
+function KpiCard({ index, icon, tint, label, value, onPress }: { index: number; icon: IconType; tint: string; label: string; value: string; onPress?: () => void }) {
+  const { t } = useI18n();
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
   const [progress] = useState(() => new Animated.Value(reduceMotion ? 1 : 0));
@@ -46,8 +47,7 @@ function KpiCard({ index, icon, tint, label, value }: { index: number; icon: Ico
   const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
   const glow: ViewStyle = Platform.OS === 'web' ? ({ boxShadow: '0 8px 24px -12px rgba(0,0,0,0.25)' } as ViewStyle) : {};
 
-  return (
-    <Animated.View style={{ opacity, transform: [{ translateY }], flexBasis: '47%', flexGrow: 1 }}>
+  const card = (
       <View
         style={[
           {
@@ -66,9 +66,21 @@ function KpiCard({ index, icon, tint, label, value }: { index: number; icon: Ico
           <AppText variant="caption" muted numberOfLines={1} style={{ flex: 1 }}>
             {label}
           </AppText>
+          {onPress ? <ChevronRightIcon color={theme.textMuted} size={16} /> : null}
         </View>
         <AppText style={{ fontFamily: fontFamily.display, fontSize: 28, lineHeight: 32, color: theme.text }}>{value}</AppText>
       </View>
+  );
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }], flexBasis: '47%', flexGrow: 1 }}>
+      {onPress ? (
+        <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}: ${value}. ${t('owner.dashboard.subscriptions.details')}`} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+          {card}
+        </Pressable>
+      ) : (
+        card
+      )}
     </Animated.View>
   );
 }
@@ -76,6 +88,92 @@ function KpiCard({ index, icon, tint, label, value }: { index: number; icon: Ico
 const CHART_W = 320;
 const CHART_H = 110;
 const CHART_PAD = 10;
+
+const TIERS = ['normal', 'vip', 'vvip'] as const;
+const TIER_LABEL_KEY = { normal: 'owner.dashboard.tier.normal', vip: 'owner.dashboard.tier.vip', vvip: 'owner.dashboard.tier.vvip' } as const;
+
+/** The grid itself: Mensile/Annuale across, Normale/VIP/VVIP down — each cell the number of people on it and
+ * what they pay. Every cell is always there (zeros included) so the picture never rearranges itself as
+ * members come and go. Numbers and words only, no colour coding to decode. */
+function SubscriptionGrid({ rows }: { rows: OwnerSubscriptionRow[] }) {
+  const { t, lang } = useI18n();
+  const theme = useTheme();
+  const money = (n: number): string => `€${n.toLocaleString(lang === 'it' ? 'it-IT' : 'en-GB')}`;
+  const cell = (kind: 'monthly' | 'annual', tier: (typeof TIERS)[number]): OwnerSubscriptionRow =>
+    rows.find((r) => r.kind === kind && r.tier === tier) ?? { kind, tier, count: 0, revenueEur: 0 };
+  const kindLabel = (kind: 'monthly' | 'annual'): string => t(kind === 'monthly' ? 'owner.dashboard.subscriptions.monthly' : 'owner.dashboard.subscriptions.annual');
+
+  return (
+    <View style={{ gap: spacing.md }}>
+      <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+        <View style={{ flex: 0.7 }} />
+        {(['monthly', 'annual'] as const).map((kind) => (
+          <View key={kind} style={{ flex: 1 }}>
+            <AppText variant="caption" muted style={{ fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              {kindLabel(kind)}
+            </AppText>
+          </View>
+        ))}
+      </View>
+
+      {TIERS.map((tier) => (
+        <View key={tier} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: theme.glassBorder }}>
+          <View style={{ flex: 0.7 }}>
+            <AppText style={{ fontWeight: '700', fontSize: 14 }}>{t(TIER_LABEL_KEY[tier])}</AppText>
+          </View>
+          {(['monthly', 'annual'] as const).map((kind) => {
+            const c = cell(kind, tier);
+            return (
+              <View key={kind} style={{ flex: 1 }} accessible accessibilityLabel={`${t(TIER_LABEL_KEY[tier])}, ${kindLabel(kind)}: ${t('owner.dashboard.subscriptions.people', { count: c.count })}, ${money(c.revenueEur)}`}>
+                <AppText style={{ fontFamily: fontFamily.displaySemi, fontSize: 22, lineHeight: 26 }}>{c.count}</AppText>
+                <AppText variant="caption" muted>
+                  {money(c.revenueEur)}
+                </AppText>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** What opens when the Owner taps "Fatturato": the total, then who is on which kind of plan. */
+function SubscriptionDetailsModal({ visible, rows, total, onClose }: { visible: boolean; rows: OwnerSubscriptionRow[]; total: string; onClose: () => void }) {
+  const { t } = useI18n();
+  const theme = useTheme();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg }}>
+        <View style={{ width: '100%', maxWidth: 520, maxHeight: '92%', borderRadius: radius.card, backgroundColor: theme.background, padding: spacing.lg, gap: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md }}>
+            <View style={{ flexShrink: 1, gap: 2 }}>
+              <AppText variant="display" numberOfLines={1} style={{ fontSize: 20 }}>
+                {t('owner.dashboard.subscriptions.title')}
+              </AppText>
+              <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
+                {t('owner.dashboard.subscriptions.hint')}
+              </AppText>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} style={{ width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' }}>
+              <XIcon color={theme.text} size={20} />
+            </Pressable>
+          </View>
+
+          <View style={{ gap: 2 }}>
+            <AppText variant="caption" muted style={{ fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              {t('owner.dashboard.revenue')}
+            </AppText>
+            <AppText style={{ fontFamily: fontFamily.display, fontSize: 32, lineHeight: 36 }}>{total}</AppText>
+          </View>
+
+          <SubscriptionGrid rows={rows} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 /** Same hand-rolled SVG "stock chart" as Admin's TrendLineCard, adapted from 12 months to 7 days. */
 function ActivityTrendCard({ data }: { data: { day: string; count: number }[] }) {
@@ -132,6 +230,7 @@ export function OwnerDashboardScreen() {
   const isSidebar = useSidebarMode();
   const overview = useAsync(() => getOwnerOverview(), []);
   const billing = useAsync(() => getOwnerPlanBilling(), []);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   usePageHeader(PulseIcon, t('owner.dashboard.title'));
 
   // Only while the automatic 3-day window is running: the server flips `warningSent` once the last 24h
@@ -172,12 +271,13 @@ export function OwnerDashboardScreen() {
               <KpiCard index={0} icon={DumbbellIcon} tint={theme.primary} label={t('owner.dashboard.managers')} value={String(overview.data.managers)} />
               <KpiCard index={1} icon={UsersIcon} tint={theme.band.green.solid} label={t('owner.dashboard.clients')} value={String(overview.data.clients)} />
               <KpiCard index={2} icon={UsersIcon} tint={theme.band.amber.solid} label={t('owner.dashboard.coaches')} value={String(overview.data.coaches)} />
-              <KpiCard index={3} icon={CreditCardIcon} tint={theme.primaryDeep} label={t('owner.dashboard.revenue')} value={revenueLabel} />
+              <KpiCard index={3} icon={CreditCardIcon} tint={theme.primaryDeep} label={t('owner.dashboard.revenue')} value={revenueLabel} onPress={() => setDetailsOpen(true)} />
             </View>
             <ActivityTrendCard data={overview.data.activity7d} />
           </View>
         </FadeSlideIn>
       ) : null}
+      <SubscriptionDetailsModal visible={detailsOpen} rows={overview.data?.subscriptions ?? []} total={revenueLabel} onClose={() => setDetailsOpen(false)} />
     </Screen>
   );
 }

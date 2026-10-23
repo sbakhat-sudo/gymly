@@ -487,7 +487,7 @@ export interface Database {
         }[];
       };
       complete_my_profile: {
-        Args: { p_first_name: string; p_last_name: string; p_birth_date: string; p_home_address: string };
+        Args: { p_first_name: string; p_last_name: string; p_birth_date: string; p_home_address: string; p_gym_name?: string | null };
         Returns: undefined;
       };
       chat_open_conversation: {

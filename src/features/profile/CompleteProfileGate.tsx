@@ -7,15 +7,18 @@ import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { PlusIcon } from '@/components/icons';
+import { getOwnerChainName } from '@/features/owner/owner-api';
 import { useAuth } from '@/lib/auth/auth-context';
 import { formatBirthInput, parseBirthDate } from '@/lib/domain/birth-date';
 import { useI18n } from '@/lib/i18n';
 import { uploadAvatar } from '@/lib/supabase/avatar';
 import { supabase } from '@/lib/supabase/client';
+import { getSiteName } from '@/lib/supabase/site-name';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
+import { useAsync } from '@/lib/use-async';
 
 const MIN_PASSWORD = 8;
-const TOTAL_STEPS = 6;
+const BASE_STEPS = 6;
 
 /**
  * The mandatory first-login profile, for staff accounts only (Owner, Manager, Coach — never Admin,
@@ -62,6 +65,7 @@ function CompleteProfileModal() {
   const [lastName, setLastName] = useState(profile?.lastName ?? '');
   const [birth, setBirth] = useState('');
   const [address, setAddress] = useState(profile?.homeAddress ?? '');
+  const [gymEdit, setGymEdit] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -74,6 +78,17 @@ function CompleteProfileModal() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState(false);
 
+  const isOwner = profile?.role === 'owner';
+  const siteId = profile && !isOwner && 'siteId' in profile ? profile.siteId : null;
+  const chainName = useAsync(() => getOwnerChainName(), [], isOwner);
+  const fixedGym = useAsync(() => (siteId ? getSiteName(siteId) : Promise.resolve(null)), [siteId], siteId !== null);
+  // Until the Owner has typed the real name, the business carries a placeholder (their own name) — don't
+  // offer that back as if it were the answer.
+  const placeholderName = chainName.data === (profile?.fullName ?? null);
+  const gymName = gymEdit ?? (chainName.data && !placeholderName ? chainName.data : '');
+  const gymOk = gymName.trim().length >= 2;
+  const totalSteps = BASE_STEPS + (isOwner ? 1 : 0);
+
   const hasPhoto = Boolean(profile?.avatarUrl);
   const firstOk = firstName.trim().length > 0;
   const lastOk = lastName.trim().length > 0;
@@ -81,8 +96,8 @@ function CompleteProfileModal() {
   const addressOk = address.trim().length >= 5;
   const passwordOk = password.length >= MIN_PASSWORD;
   const passwordsMatch = password === password2;
-  const done = [hasPhoto, firstOk, lastOk, birthIso !== null, addressOk, passwordOk && passwordsMatch && password2.length > 0].filter(Boolean).length;
-  const allOk = done === TOTAL_STEPS;
+  const done = [hasPhoto, firstOk, lastOk, birthIso !== null, addressOk, passwordOk && passwordsMatch && password2.length > 0, ...(isOwner ? [gymOk] : [])].filter(Boolean).length;
+  const allOk = done === totalSteps;
 
   async function pickPhoto(): Promise<void> {
     if (!userId) return;
@@ -136,6 +151,7 @@ function CompleteProfileModal() {
         p_last_name: lastName,
         p_birth_date: birthIso,
         p_home_address: address,
+        p_gym_name: isOwner ? gymName : null,
       });
       if (error) throw error;
       // The popup disappears by itself: the refreshed profile now carries `profileCompletedAt`.
@@ -211,12 +227,12 @@ function CompleteProfileModal() {
             </View>
 
             {/* Progress as a bar AND words, never colour alone. */}
-            <View style={{ gap: 6 }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: TOTAL_STEPS, now: done }}>
+            <View style={{ gap: 6 }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: totalSteps, now: done }}>
               <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.surfaceAlt, overflow: 'hidden' }}>
-                <View style={{ height: 6, width: `${(done / TOTAL_STEPS) * 100}%`, borderRadius: 3, backgroundColor: theme.primary }} />
+                <View style={{ height: 6, width: `${(done / totalSteps) * 100}%`, borderRadius: 3, backgroundColor: theme.primary }} />
               </View>
               <AppText variant="caption" muted>
-                {t('profileSetup.progress', { n: done, total: TOTAL_STEPS })} · {t('profileSetup.required')}
+                {t('profileSetup.progress', { n: done, total: totalSteps })} · {t('profileSetup.required')}
               </AppText>
             </View>
 
@@ -240,6 +256,31 @@ function CompleteProfileModal() {
                 {t('profileSetup.email.hint')}
               </AppText>
             </Field>
+
+            {isOwner ? (
+              <Field label={t('profileSetup.gymName')} error={submitted && !gymOk ? t('profileSetup.field.required') : null}>
+                <TextInput
+                  value={gymName}
+                  onChangeText={setGymEdit}
+                  placeholder={t('profileSetup.gymName.placeholder')}
+                  placeholderTextColor={theme.textMuted}
+                  accessibilityLabel={t('profileSetup.gymName')}
+                  maxLength={120}
+                  style={inputStyle}
+                />
+                <AppText variant="caption" muted>
+                  {t('profileSetup.gymName.hint')}
+                </AppText>
+              </Field>
+            ) : fixedGym.data ? (
+              <Field label={t('profileSetup.gym')}>
+                {/* Set by the Owner and the same for everyone under them — shown, never asked. */}
+                <TextInput value={fixedGym.data} editable={false} accessibilityLabel={t('profileSetup.gym')} style={[inputStyle, { backgroundColor: theme.surfaceAlt, color: theme.textMuted }]} />
+                <AppText variant="caption" muted>
+                  {t('profileSetup.gym.hint')}
+                </AppText>
+              </Field>
+            ) : null}
 
             <Field label={t('profileSetup.birthDate')} error={submitted && birthIso === null ? t('profileSetup.birthDate.invalid') : null}>
               <TextInput

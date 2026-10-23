@@ -18,7 +18,7 @@ import { usePageHeader } from '@/lib/page-header-context';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
-import { addManager, getOwnerManagerDetail, getOwnerManagers, type AddManagerResult, type OwnerClient, type OwnerManagerDetail, type OwnerManagerRow } from './owner-api';
+import { addManager, getOwnerChainName, getOwnerManagerDetail, getOwnerManagers, type AddManagerResult, type OwnerClient, type OwnerManagerDetail, type OwnerManagerRow } from './owner-api';
 
 const PAGE_SIZE = 8;
 
@@ -82,7 +82,10 @@ function AddManagerModal({ visible, onClose, onCreated }: { visible: boolean; on
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
-  const [siteName, setSiteName] = useState('');
+  // The gym's name is the Owner's, chosen once and the same for every Manager they add — shown here locked
+  // (the database enforces it as well, see owner_create_manager_record()).
+  const chain = useAsync(() => getOwnerChainName(), [], visible);
+  const siteName = chain.data ?? '';
   const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [busy, setBusy] = useState(false);
@@ -101,7 +104,6 @@ function AddManagerModal({ visible, onClose, onCreated }: { visible: boolean; on
     setFullName('');
     setEmail('');
     setWhatsapp('');
-    setSiteName('');
     setStreet('');
     setCity('');
     setError(null);
@@ -168,7 +170,12 @@ function AddManagerModal({ visible, onClose, onCreated }: { visible: boolean; on
               <Field label={t('auth.signup.fullName')} value={fullName} onChangeText={setFullName} />
               <Field label={t('auth.signup.email')} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
               <Field label={t('manager.people.invite.phoneLabel')} value={whatsapp} onChangeText={setWhatsapp} placeholder={t('manager.people.invite.phonePlaceholder')} />
-              <Field label={t('owner.managers.add.siteName')} value={siteName} onChangeText={setSiteName} />
+              <View style={{ gap: 4 }}>
+                <Field label={t('owner.managers.add.siteName')} value={siteName} editable={false} />
+                <AppText muted style={{ fontSize: 12 }}>
+                  {t('owner.managers.add.siteNameFixed')}
+                </AppText>
+              </View>
 
               <View style={{ gap: spacing.sm }}>
                 <AppText variant="caption" style={{ fontWeight: '600' }}>
