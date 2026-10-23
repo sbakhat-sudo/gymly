@@ -13,6 +13,7 @@ import { ChatModal } from '@/features/chat/ChatModal';
 import { getConversations, openConversation } from '@/features/chat/chat-api';
 import { Pagination } from '@/components/TablePagination';
 import { avatarTint } from '@/lib/avatar-tint';
+import { isPlausibleName, isPlausiblePhone } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
 import { usePageHeader } from '@/lib/page-header-context';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
@@ -98,7 +99,9 @@ function AddManagerModal({ visible, onClose, onCreated }: { visible: boolean; on
   // in "Posizione palestra" themselves — nothing here depends on having it upfront.
   const fullAddress = [street.trim(), city.trim()].filter(Boolean).join(', ');
   const addressQuery = fullAddress || null;
-  const canSubmit = fullName.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && siteName.trim().length > 0 && fullAddress.length > 0;
+  const nameBad = fullName.trim().length > 0 && !isPlausibleName(fullName);
+  const phoneBad = whatsapp.trim().length > 0 && !isPlausiblePhone(whatsapp);
+  const canSubmit = fullName.trim().length > 0 && !nameBad && !phoneBad && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && siteName.trim().length > 0 && fullAddress.length > 0;
 
   function reset(): void {
     setFullName('');
@@ -190,6 +193,7 @@ function AddManagerModal({ visible, onClose, onCreated }: { visible: boolean; on
                 </AppText>
               </View>
 
+              {nameBad || phoneBad ? <Banner title={t(nameBad ? 'auth.signup.error.invalidName' : 'auth.signup.error.invalidPhone')} /> : null}
               {error ? <Banner title={error} /> : null}
 
               <Button label={t('owner.managers.add.submit')} onPress={() => void submit()} disabled={!canSubmit || busy} />

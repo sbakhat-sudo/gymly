@@ -14,6 +14,7 @@ import { Screen } from '@/components/Screen';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useAuth } from '@/lib/auth/auth-context';
 import { formatShortDate } from '@/lib/format';
+import { isPlausibleName, isPlausiblePhone } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
 import { logger } from '@/lib/logger';
 import { useAsync } from '@/lib/use-async';
@@ -367,7 +368,9 @@ function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreat
     setCreated(null);
   }
 
-  const canSubmit = name.trim().length > 0 && email.trim().length > 0 && sanitizePhone(phone).length > 0;
+  const nameBad = name.trim().length > 0 && !isPlausibleName(name);
+  const phoneBad = phone.trim().length > 0 && !isPlausiblePhone(phone);
+  const canSubmit = name.trim().length > 0 && !nameBad && email.trim().length > 0 && sanitizePhone(phone).length > 0 && !phoneBad;
 
   return (
     <View>
@@ -442,6 +445,11 @@ function AddMemberPanel({ role, onCreated }: { role: 'coach' | 'client'; onCreat
                     !emailLooksValid ? 'manager.people.invite.emailInvalid' : emailTaken ? 'manager.people.invite.emailTaken' : 'manager.people.invite.error'
                   )}
                 />
+              ) : null}
+              {nameBad || phoneBad ? (
+                <AppText color={theme.danger} style={{ fontSize: 13, fontWeight: '600' }}>
+                  {t(nameBad ? 'auth.signup.error.invalidName' : 'auth.signup.error.invalidPhone')}
+                </AppText>
               ) : null}
               <Button label={t('manager.people.invite.send')} onPress={() => void submit()} disabled={busy || !canSubmit} />
             </>

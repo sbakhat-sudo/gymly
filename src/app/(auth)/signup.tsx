@@ -58,7 +58,7 @@ function ClientOrCoachSignupScreen({ initialRole }: { initialRole: Role }) {
 
   async function submit(): Promise<void> {
     if (!fields.isValid) {
-      setError(t('auth.signup.error.missingSite'));
+      setError(t(fields.nameBad ? 'auth.signup.error.invalidName' : fields.phoneBad ? 'auth.signup.error.invalidPhone' : 'auth.signup.error.missingSite'));
       return;
     }
     if (password.trim().length < 6) {

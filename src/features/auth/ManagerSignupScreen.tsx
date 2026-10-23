@@ -9,6 +9,7 @@ import { FadeSlideIn } from '@/components/FadeSlideIn';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useReduceMotion } from '@/lib/hooks';
+import { isPlausibleName } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
 import { storage } from '@/lib/storage';
 import { supabase } from '@/lib/supabase/client';
@@ -41,6 +42,10 @@ export function ManagerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan
     if (!plan) return;
     if (password.trim().length < 6) {
       setError(t('auth.signup.error.weakPassword'));
+      return;
+    }
+    if (fullName.trim() && !isPlausibleName(fullName)) {
+      setError(t('auth.signup.error.invalidName'));
       return;
     }
     setBusy(true);

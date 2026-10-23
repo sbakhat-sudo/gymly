@@ -3,6 +3,7 @@ import { ActivityIndicator, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
+import { isPlausibleName, isPlausiblePhone } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase/client';
 import { MIN_TAP, fontFamily, spacing, useTheme } from '@/lib/theme';
@@ -67,6 +68,9 @@ export function useRoleAndSiteFields(initialRole: Role = 'client') {
   const query = siteQuery.trim().toLowerCase();
   const filteredSites = query.length > 0 ? (sites?.filter((s) => s.name.toLowerCase().includes(query)) ?? null) : null;
   const matchedSite = filteredSites && filteredSites.length === 1 ? filteredSites[0] : null;
+  // A browser's saved-credentials autofill can drop an email address into the name or phone field.
+  const nameBad = fullName.trim().length > 0 && !isPlausibleName(fullName);
+  const phoneBad = phone.trim().length > 0 && !isPlausiblePhone(phone);
 
   return {
     role,
@@ -80,7 +84,9 @@ export function useRoleAndSiteFields(initialRole: Role = 'client') {
     setSiteQuery,
     filteredSites,
     matchedSite,
-    isValid: matchedSite !== null,
+    nameBad,
+    phoneBad,
+    isValid: matchedSite !== null && !nameBad && !phoneBad,
     values: (): RoleAndSiteValues => ({ role, fullName, phone, siteId: matchedSite?.site_id ?? null }),
   };
 }
@@ -96,7 +102,7 @@ export type RoleAndSiteFieldsState = ReturnType<typeof useRoleAndSiteFields>;
 export function RoleAndSiteFields({ fields }: { fields: RoleAndSiteFieldsState }) {
   const { t } = useI18n();
   const theme = useTheme();
-  const { role, fullName, setFullName, phone, setPhone, sites, sitesError, siteQuery, setSiteQuery, filteredSites, matchedSite } = fields;
+  const { role, fullName, setFullName, phone, setPhone, sites, sitesError, siteQuery, setSiteQuery, filteredSites, matchedSite, nameBad, phoneBad } = fields;
 
   const inputStyle = {
     minHeight: MIN_TAP + 4,
@@ -133,6 +139,7 @@ export function RoleAndSiteFields({ fields }: { fields: RoleAndSiteFieldsState }
           textContentType="name"
           style={inputStyle}
         />
+        {nameBad ? <AppText color={theme.danger} style={{ fontSize: 13, fontWeight: '600' }}>{t('auth.signup.error.invalidName')}</AppText> : null}
       </View>
 
       <View style={{ gap: spacing.sm }}>
@@ -150,6 +157,7 @@ export function RoleAndSiteFields({ fields }: { fields: RoleAndSiteFieldsState }
           textContentType="telephoneNumber"
           style={inputStyle}
         />
+        {phoneBad ? <AppText color={theme.danger} style={{ fontSize: 13, fontWeight: '600' }}>{t('auth.signup.error.invalidPhone')}</AppText> : null}
       </View>
 
       <View style={{ gap: spacing.sm }}>
