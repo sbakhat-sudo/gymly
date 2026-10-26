@@ -2,20 +2,27 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { supabase } from '@/lib/supabase/client';
 
-/** How many members are on one kind of plan, and what those subscriptions add up to. */
+/** How many members are on one subscription (an Owner plan, or a Manager's own that someone pays for), and what
+ * they add up to. */
 export interface OwnerSubscriptionRow {
+  planKey: string;
+  name: string;
+  color: string | null;
   kind: 'monthly' | 'annual';
-  tier: 'normal' | 'vip' | 'vvip';
   count: number;
   revenueEur: number;
 }
 
-/** Payments recorded in one month for one kind of plan (see the subscription_payments history table). */
+/** Payments recorded in one month for one plan the clients chose — an Owner plan or a Manager's own (see the
+ * subscription_payments history table). */
 export interface OwnerSubscriptionTrendPoint {
   /** First day of the month, ISO date. */
   monthStart: string;
+  planKey: string;
+  planName: string;
+  /** The plan's own colour — null for an old plan that never had one. */
+  planColor: string | null;
   kind: 'monthly' | 'annual';
-  tier: 'normal' | 'vip' | 'vvip';
   subscribers: number;
   revenueEur: number;
 }
@@ -28,7 +35,7 @@ export interface OwnerOverview {
   revenueEur: number;
   /** What the Owner's gyms cost on Gymly's own plans (pro/business) — a different number from the above. */
   planCostEur: number;
-  /** Always six rows — Mensile/Annuale x Normale/VIP/VVIP, zeros included. */
+  /** One row per subscription — every Owner plan (zeros included) plus any other someone actively pays for. */
   subscriptions: OwnerSubscriptionRow[];
   activity7d: { day: string; count: number }[];
 }
@@ -53,7 +60,27 @@ export async function getOwnerOverview(): Promise<OwnerOverview> {
 export async function getOwnerSubscriptionTrend(months = 6): Promise<OwnerSubscriptionTrendPoint[]> {
   const { data, error } = await supabase.rpc('owner_get_subscription_trend', { p_months: months });
   if (error) throw error;
-  return data.map((r) => ({ monthStart: r.month_start, kind: r.kind, tier: r.tier, subscribers: r.subscribers, revenueEur: r.revenue_eur }));
+  return data.map((r) => ({ monthStart: r.month_start, planKey: r.plan_key, planName: r.plan_name, planColor: r.plan_color, kind: r.kind, subscribers: r.subscribers, revenueEur: r.revenue_eur }));
+}
+
+/** Payments in one week of the current month, for one plan (see the weeks function in the database). */
+export interface OwnerSubscriptionWeekPoint {
+  weekNo: number;
+  rangeStart: string;
+  rangeEnd: string;
+  planKey: string;
+  planName: string;
+  planColor: string | null;
+  kind: 'monthly' | 'annual';
+  subscribers: number;
+  revenueEur: number;
+}
+
+/** Week by week through this month (Monday-Sunday, clipped to the month), every plan in every week, zeros included. */
+export async function getOwnerSubscriptionWeeks(): Promise<OwnerSubscriptionWeekPoint[]> {
+  const { data, error } = await supabase.rpc('owner_get_subscription_weeks', {});
+  if (error) throw error;
+  return data.map((r) => ({ weekNo: r.week_no, rangeStart: r.range_start, rangeEnd: r.range_end, planKey: r.plan_key, planName: r.plan_name, planColor: r.plan_color, kind: r.kind, subscribers: r.subscribers, revenueEur: r.revenue_eur }));
 }
 
 /** The Owner's own app-plan payment state — `grace` means the automatic 3-day window is running;
@@ -212,23 +239,35 @@ export interface OwnerPlanCard {
   id: string;
   name: string;
   kind: 'monthly' | 'annual';
+  priceEur: number;
+  description: string | null;
+  /** Hex that makes the card recognisable everywhere it appears. */
+  color: string | null;
   active: boolean;
   createdAt: string;
 }
 
+export interface OwnerPlanCardInput {
+  name: string;
+  kind: 'monthly' | 'annual';
+  priceEur: number;
+  description: string | null;
+  color: string | null;
+}
+
 export async function getOwnerPlanCards(): Promise<OwnerPlanCard[]> {
-  const { data, error } = await supabase.from('owner_plan_cards').select('id, name, kind, active, created_at').order('created_at');
+  const { data, error } = await supabase.from('owner_plan_cards').select('id, name, kind, price_eur, description, color, active, created_at').order('created_at');
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, kind: r.kind, active: r.active, createdAt: r.created_at }));
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, kind: r.kind, priceEur: r.price_eur, description: r.description, color: r.color, active: r.active, createdAt: r.created_at }));
 }
 
-export async function createOwnerPlanCard(name: string, kind: 'monthly' | 'annual'): Promise<void> {
-  const { error } = await supabase.rpc('owner_create_plan_card', { p_name: name, p_kind: kind });
+export async function createOwnerPlanCard(input: OwnerPlanCardInput): Promise<void> {
+  const { error } = await supabase.rpc('owner_create_plan_card', { p_name: input.name, p_kind: input.kind, p_price_eur: input.priceEur, p_description: input.description, p_color: input.color });
   if (error) throw error;
 }
 
-export async function updateOwnerPlanCard(cardId: string, name: string, kind: 'monthly' | 'annual'): Promise<void> {
-  const { error } = await supabase.rpc('owner_update_plan_card', { p_card_id: cardId, p_name: name, p_kind: kind });
+export async function updateOwnerPlanCard(cardId: string, input: OwnerPlanCardInput): Promise<void> {
+  const { error } = await supabase.rpc('owner_update_plan_card', { p_card_id: cardId, p_name: input.name, p_kind: input.kind, p_price_eur: input.priceEur, p_description: input.description, p_color: input.color });
   if (error) throw error;
 }
 

@@ -12,6 +12,8 @@ import { usePageHeader } from '@/lib/page-header-context';
 import { fontFamily, spacing } from '@/lib/theme';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
+import { ActivityCard } from '@/features/activity/ActivityCard';
+
 import { ManagerMessagesSection } from './ManagerMessagesSection';
 import { ManagerNotifications } from './ManagerNotifications';
 
@@ -35,6 +37,7 @@ export function ManagerSettingsScreen() {
       </View>
 
       <ProfileHero />
+      <ActivityCard roles={['coach', 'client']} />
       <PreferencesGroup />
       <ManagerMessagesSection />
       <ProfileSection />

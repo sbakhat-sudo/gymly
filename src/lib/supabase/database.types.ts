@@ -333,6 +333,9 @@ export interface Database {
           chain_id: string;
           name: string;
           kind: 'monthly' | 'annual';
+          price_eur: number;
+          description: string | null;
+          color: string | null;
           active: boolean;
           created_at: string;
         };
@@ -513,7 +516,22 @@ export interface Database {
       };
       owner_get_subscription_trend: {
         Args: { p_months?: number };
-        Returns: { month_start: string; kind: 'monthly' | 'annual'; tier: 'normal' | 'vip' | 'vvip'; subscribers: number; revenue_eur: number }[];
+        Returns: { month_start: string; plan_key: string; plan_name: string; plan_color: string | null; kind: 'monthly' | 'annual'; subscribers: number; revenue_eur: number }[];
+      };
+      owner_get_subscription_weeks: {
+        Args: { p_month?: string | null };
+        Returns: { week_no: number; range_start: string; range_end: string; plan_key: string; plan_name: string; plan_color: string | null; kind: 'monthly' | 'annual'; subscribers: number; revenue_eur: number }[];
+      };
+      get_activity_feed: {
+        Args: { p_limit?: number; p_before?: string | null; p_role?: string | null };
+        Returns: {
+          event_at: string;
+          event_type: 'checkin' | 'checkout' | 'payment' | 'rating' | 'issue' | 'account_created' | 'activated' | 'deactivated' | 'sign_in';
+          actor_id: string;
+          actor_name: string;
+          actor_role: 'owner' | 'manager' | 'coach' | 'client';
+          detail: string | null;
+        }[];
       };
       chat_get_my_owner: {
         Args: Record<string, never>;
@@ -735,11 +753,11 @@ export interface Database {
         Returns: undefined;
       };
       owner_create_plan_card: {
-        Args: { p_name: string; p_kind: 'monthly' | 'annual' };
+        Args: { p_name: string; p_kind: 'monthly' | 'annual'; p_price_eur: number; p_description: string | null; p_color: string | null };
         Returns: string;
       };
       owner_update_plan_card: {
-        Args: { p_card_id: string; p_name: string; p_kind: 'monthly' | 'annual' };
+        Args: { p_card_id: string; p_name: string; p_kind: 'monthly' | 'annual'; p_price_eur: number; p_description: string | null; p_color: string | null };
         Returns: undefined;
       };
       owner_set_plan_card_active: {

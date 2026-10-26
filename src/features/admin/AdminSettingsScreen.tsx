@@ -9,6 +9,7 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { PreferencesGroup } from '@/components/settings/PreferencesGroup';
 import { ProfileHero } from '@/components/settings/ProfileHero';
 import { SettingsGroup, SettingsRow } from '@/components/settings/SettingsKit';
+import { ActivityCard } from '@/features/activity/ActivityCard';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/lib/theme';
 
@@ -33,6 +34,8 @@ export function AdminSettingsScreen() {
         <SettingsRow icon={EyeIcon} label={t('admin.gpsAudit.title')} onPress={() => router.push('/audit-gps')} />
         <SettingsRow icon={ClockIcon} label={t('admin.actionsLog.fullTitle')} onPress={() => router.push('/azioni-admin')} />
       </SettingsGroup>
+
+      <ActivityCard roles={['owner', 'coach', 'client']} />
 
       <PreferencesGroup withTheme />
       <ProfileSection />

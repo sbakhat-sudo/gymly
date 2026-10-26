@@ -6,6 +6,7 @@ import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { DumbbellIcon, SlidersIcon } from '@/components/icons';
+import { ActivityCard } from '@/features/activity/ActivityCard';
 import { Screen } from '@/components/Screen';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { PreferencesGroup } from '@/components/settings/PreferencesGroup';
@@ -135,6 +136,8 @@ export function OwnerSettingsScreen() {
       <SettingsGroup title={t('owner.settings.gym.title')}>
         <ChainNameRow />
       </SettingsGroup>
+
+      <ActivityCard roles={['manager', 'coach', 'client']} />
 
       <PreferencesGroup withTheme />
 
