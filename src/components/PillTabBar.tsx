@@ -1,5 +1,5 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, Pressable, ScrollView, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -105,7 +105,7 @@ function Pill({ state, descriptors, navigation, insets }: BottomTabBarProps) {
 
 /** The hover name pill: fades and slides in from the icon. Opacity + transform only, so it runs
  * without touching layout (nothing else on the page moves or re-measures while it plays). */
-function HoverLabel({ label }: { label: string }) {
+function HoverLabel({ label, anchor }: { label: string; anchor?: { left: number; centerY: number } }) {
   const reduceMotion = useReduceMotion();
   const [progress] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -117,8 +117,8 @@ function HoverLabel({ label }: { label: string }) {
       style={[
         {
           position: 'absolute',
-          left: 66,
-          top: '50%',
+          left: anchor ? anchor.left : 66,
+          top: anchor ? anchor.centerY : '50%',
           marginTop: -17,
           paddingHorizontal: 12,
           paddingVertical: 8,
@@ -146,23 +146,41 @@ function SidebarItem({
   focused,
   danger = false,
   onPress,
+  onTip,
 }: {
   icon: (color: string) => ReactNode;
   label: string;
   focused: boolean;
   danger?: boolean;
   onPress: () => void;
+  /** Items inside the sidebar's ScrollView can't draw their own pill — a scroll container clips
+   * anything past its edge, so the label would be cut off. They report the hover instead and the
+   * sidebar draws the pill outside the scroll (see `Sidebar`). */
+  onTip?: (tip: { label: string; left: number; centerY: number } | null) => void;
 }) {
   const theme = useTheme();
   const [hovered, setHovered] = useState(false);
+  const boxRef = useRef<View>(null);
   const color = danger ? theme.band.red.solid : focused ? theme.text : theme.faint;
 
+  const hoverIn = (): void => {
+    if (!onTip) {
+      setHovered(true);
+      return;
+    }
+    boxRef.current?.measureInWindow((x, y, w, h) => onTip({ label, left: x + w + 14, centerY: y + h / 2 }));
+  };
+  const hoverOut = (): void => {
+    if (onTip) onTip(null);
+    else setHovered(false);
+  };
+
   return (
-    <View style={{ position: 'relative' }}>
+    <View ref={boxRef} style={{ position: 'relative' }}>
       <Pressable
         onPress={onPress}
-        onHoverIn={() => setHovered(true)}
-        onHoverOut={() => setHovered(false)}
+        onHoverIn={hoverIn}
+        onHoverOut={hoverOut}
         accessibilityRole="button"
         accessibilityState={{ selected: focused }}
         accessibilityLabel={label}
@@ -187,6 +205,7 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
   const auth = useAuth();
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index];
+  const [tip, setTip] = useState<{ label: string; left: number; centerY: number } | null>(null);
   const profile = auth.status === 'active' || auth.status === 'admin' || auth.status === 'owner' ? auth.profile : null;
   const roleLabel = profile ? t(`sidebar.role.${profile.role}` as 'sidebar.role.manager' | 'sidebar.role.coach' | 'sidebar.role.admin' | 'sidebar.role.owner') : null;
 
@@ -245,6 +264,7 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
                 label={label}
                 focused={focused}
                 onPress={() => goTo(route.name, route.key)}
+                onTip={setTip}
                 icon={(color) => options.tabBarIcon?.({ focused, color, size: 24 })}
               />
             );
@@ -255,6 +275,7 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
           <SidebarItem label={t('account.signOut')} focused={false} danger onPress={() => void auth.signOut()} icon={(color) => <LogOutIcon color={color} size={22} strokeWidth={2.2} />} />
         ) : null}
       </View>
+      {tip ? <HoverLabel key={tip.label} label={tip.label} anchor={{ left: tip.left, centerY: tip.centerY }} /> : null}
     </View>
   );
 }

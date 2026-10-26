@@ -52,6 +52,12 @@ export function AppText({ variant = 'body', muted = false, color, style, ...rest
   const base = VARIANTS[variant];
   const flat = StyleSheet.flatten(style) ?? {};
   const family = flat.fontFamily ?? familyFor(variant, flat.fontWeight ?? base.fontWeight);
+  // Unbounded is a wide, heavy face: at the -4%/-5% tracking the scale asks for, letters touch and
+  // titles ("Dettaglio Manager") turn into a smudge at card-title sizes. Keep tracking open there.
+  const size = flat.fontSize ?? base.fontSize;
+  const tracking = flat.letterSpacing ?? base.letterSpacing;
+  const isDisplayFace = family === fontFamily.display || family === fontFamily.displaySemi || family === fontFamily.displayHeavy;
+  const openTracking = isDisplayFace && size <= 40 && tracking !== undefined ? { letterSpacing: Math.max(tracking, size * -0.01) } : null;
   return (
     <Text
       maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -59,6 +65,7 @@ export function AppText({ variant = 'body', muted = false, color, style, ...rest
         base,
         { color: color ?? (muted ? theme.textMuted : theme.text) },
         flat,
+        openTracking,
         { fontFamily: family, fontWeight: undefined },
       ]}
       {...rest}
