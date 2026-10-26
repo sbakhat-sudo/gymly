@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Pressable, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -274,7 +274,7 @@ function PlanPickerModal({ visible, onPick }: { visible: boolean; onPick: (plan:
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={{ flex: 1, backgroundColor: theme.background }}>
-        <View style={{ flex: 1, paddingTop: spacing.xxl, paddingHorizontal: spacing.lg, gap: spacing.xl }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: spacing.xxl, paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.xl }} showsVerticalScrollIndicator={false}>
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
             accessibilityRole="button"
@@ -320,7 +320,7 @@ function PlanPickerModal({ visible, onPick }: { visible: boolean; onPick: (plan:
               </FadeSlideIn>
             ))}
           </View>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );

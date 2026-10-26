@@ -5,6 +5,7 @@ import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { DateBadge } from '@/components/DateBadge';
 import { FilterGroup } from '@/components/FilterControls';
 import { CheckIcon, DownloadIcon, EyeIcon, SearchIcon, SlidersIcon, StarFilledIcon } from '@/components/icons';
@@ -203,7 +204,7 @@ export function ManagerFeedbackScreen() {
 
         {ratings.error ? <Banner title={t('manager.feedback.error')} /> : null}
         {ratings.data === undefined && ratings.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-        {ratings.data && filtered.length === 0 ? <Banner message={t('manager.feedback.empty')} /> : null}
+        {ratings.data && filtered.length === 0 ? <EmptyState message={t('manager.feedback.empty')} /> : null}
 
         {pageRows.length > 0 ? (
           <View style={{ width: '100%', borderRadius: radius.lg, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>

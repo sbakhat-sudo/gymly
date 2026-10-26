@@ -6,6 +6,7 @@ import { AddressMapPreview } from '@/components/AddressMapPreview';
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import { CheckIcon, ChevronLeftIcon, MapPinIcon, MessageCircleIcon, PlusIcon, UsersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
@@ -559,7 +560,7 @@ export function OwnerManagersScreen() {
       {managers.error ? <Banner title={t('owner.managers.error')} /> : null}
       {chatError ? <Banner title={t('owner.managers.message.error')} /> : null}
       {managers.data === undefined && managers.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {managers.data && rows.length === 0 ? <Banner message={t('owner.managers.empty')} /> : null}
+      {managers.data && rows.length === 0 ? <EmptyState message={t('owner.managers.empty')} icon={UsersIcon} /> : null}
 
       {pageRows.length > 0 ? (
         <View style={{ gap: spacing.sm }}>

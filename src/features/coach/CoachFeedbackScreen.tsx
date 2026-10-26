@@ -5,6 +5,7 @@ import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import { DateBadge } from '@/components/DateBadge';
 import { FilterChip, FilterGroup } from '@/components/FilterControls';
@@ -148,7 +149,7 @@ export function CoachFeedbackScreen() {
 
         {ratings.error ? <Banner title={t('coach.feedback.error')} /> : null}
         {ratings.data === undefined && ratings.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-        {ratings.data && filtered.length === 0 ? <Banner message={t('coach.feedback.empty')} /> : null}
+        {ratings.data && filtered.length === 0 ? <EmptyState message={t('coach.feedback.empty')} /> : null}
 
         {pageRows.length > 0 ? (
           <View style={{ width: '100%', borderRadius: radius.lg, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>

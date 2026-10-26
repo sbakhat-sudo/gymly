@@ -2,6 +2,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { BackButton } from '@/components/BackButton';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { ClockIcon } from '@/components/icons';
 import { PageTitle } from '@/components/PageTitle';
 import { Screen } from '@/components/Screen';
@@ -28,7 +29,7 @@ export function AdminActionsLogScreen() {
 
       {log.error ? <Banner title={t('admin.actionsLog.error')} /> : null}
       {log.data === undefined && log.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {log.data && log.data.length === 0 ? <Banner message={t('admin.actionsLog.empty')} /> : null}
+      {log.data && log.data.length === 0 ? <EmptyState message={t('admin.actionsLog.empty')} /> : null}
 
       {log.data && log.data.length > 0 ? (
         <View style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, overflow: 'hidden' }}>

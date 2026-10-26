@@ -9,7 +9,8 @@ import { usePhotoChange } from './use-photo-change';
 
 /**
  * The profile card at the top of every signed-in role's Impostazioni: photo (tap to change), name, role, the
- * gym (the Owner's own business name for an Owner, otherwise the gym they belong to) and the sign-in email.
+ * gym (the Owner's own business name for an Owner, otherwise the gym they belong to — always shown next to the role,
+ * since it says which gym the app is being used for) and the sign-in email.
  * Reads everything from the session, so each role's screen just renders `<ProfileHero />`.
  */
 export function ProfileHero() {

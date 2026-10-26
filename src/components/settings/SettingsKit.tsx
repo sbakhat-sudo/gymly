@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
-import { ChevronRightIcon, MapPinIcon, PlusIcon } from '@/components/icons';
+import { ChevronRightIcon, DumbbellIcon, PlusIcon } from '@/components/icons';
 import { Segmented } from '@/components/Segmented';
 import { fontFamily, MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 
@@ -218,7 +218,7 @@ export function SettingsHero({
           </View>
           {gymName ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: theme.surfaceAlt }}>
-              <MapPinIcon color={theme.textMuted} size={13} />
+              <DumbbellIcon color={theme.textMuted} size={13} />
               <AppText style={{ fontWeight: '600', fontSize: 12.5 }} numberOfLines={1}>
                 {gymName}
               </AppText>

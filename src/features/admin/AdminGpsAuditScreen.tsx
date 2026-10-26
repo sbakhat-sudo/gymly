@@ -5,6 +5,7 @@ import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { BackButton } from '@/components/BackButton';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { ChevronDownIcon, EyeIcon } from '@/components/icons';
 import { PageTitle } from '@/components/PageTitle';
 import { Screen } from '@/components/Screen';
@@ -71,7 +72,7 @@ export function AdminGpsAuditScreen() {
 
       {log.error ? <Banner title={t('admin.gpsAudit.error')} /> : null}
       {log.data === undefined && log.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {log.data && log.data.length === 0 ? <Banner message={t('admin.gpsAudit.empty')} /> : null}
+      {log.data && log.data.length === 0 ? <EmptyState message={t('admin.gpsAudit.empty')} /> : null}
 
       {log.data && log.data.length > 0 ? (
         <View style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, overflow: 'hidden' }}>

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
-import { Button } from '@/components/Button';
+import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { ChevronLeftIcon, CreditCardIcon, PlusIcon } from '@/components/icons';
+import { CreditCardIcon, PlusIcon, UsersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { Toggle } from '@/components/Toggle';
 import { getManagersCanCreateCards } from '@/features/billing/billing-api';
@@ -25,8 +25,7 @@ import {
   updateOwnerPlanCard,
   type OwnerPlanCard,
 } from './owner-api';
-
-type Kind = OwnerPlanCard['kind'];
+import { PlanCardModal } from './PlanCardModal';
 
 /**
  * "Abbonamenti" — the Owner's own catalog: free-text name, monthly or annual, and the day it was
@@ -60,7 +59,7 @@ export function OwnerPlansScreen() {
         <View style={{ gap: 2, flex: 1 }}>
           {/* Sidebar mode already shows this title in the fixed top bar (`usePageHeader` above). */}
           {!isSidebar ? <AppText style={{ fontSize: 26, fontWeight: '800' }}>{t('owner.plans.title')}</AppText> : null}
-          <AppText muted style={{ fontSize: 13 }}>
+          <AppText muted style={{ fontSize: 14, lineHeight: 20 }}>
             {t('owner.plans.subtitle')}
           </AppText>
         </View>
@@ -73,34 +72,42 @@ export function OwnerPlansScreen() {
         </Pressable>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder }}>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+          <UsersIcon color={theme.primary} size={20} />
+        </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <AppText style={{ fontWeight: '700', fontSize: 14 }}>{t('owner.plans.managersCreate')}</AppText>
-          <AppText muted style={{ fontSize: 12.5 }}>
-            {t('owner.plans.managersCreateHelp')}
+          <AppText style={{ fontWeight: '800', fontSize: 15.5 }}>{t('owner.plans.managersCreate')}</AppText>
+          <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
+            {t(allowed.data === true ? 'owner.plans.managersCreateHelpOn' : 'owner.plans.managersCreateHelp')}
           </AppText>
         </View>
-        <Toggle
-          value={allowed.data === true}
-          disabled={allowed.data === undefined}
-          accessibilityLabel={t('owner.plans.managersCreate')}
-          onValueChange={(next) => {
-            setActionError(false);
-            setManagersCanCreateCards(next)
-              .then(() => allowed.reload())
-              .catch(() => setActionError(true));
-          }}
-        />
+        <View style={{ alignItems: 'center', gap: 2 }}>
+          <Toggle
+            value={allowed.data === true}
+            disabled={allowed.data === undefined}
+            accessibilityLabel={t('owner.plans.managersCreate')}
+            onValueChange={(next) => {
+              setActionError(false);
+              setManagersCanCreateCards(next)
+                .then(() => allowed.reload())
+                .catch(() => setActionError(true));
+            }}
+          />
+          <AppText variant="caption" style={{ fontWeight: '700', color: allowed.data === true ? theme.primary : theme.textMuted }}>
+            {t(allowed.data === true ? 'owner.plans.on' : 'owner.plans.off')}
+          </AppText>
+        </View>
       </View>
 
       {cards.error || actionError ? <Banner title={t('owner.plans.error')} /> : null}
       {cards.data === undefined && cards.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {cards.data && cards.data.length === 0 ? <Banner message={t('owner.plans.empty')} /> : null}
+      {cards.data && cards.data.length === 0 ? <EmptyState message={t('owner.plans.empty')} icon={CreditCardIcon} /> : null}
 
       {cards.data && cards.data.length > 0 ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
           {cards.data.map((c) => {
-            const tint = avatarTint(theme, c.name);
+            const tint = c.color ?? avatarTint(theme, c.name);
             return (
               <Pressable
                 key={c.id}
@@ -128,6 +135,12 @@ export function OwnerPlansScreen() {
                   {t(c.kind === 'annual' ? 'owner.plans.kind.annual' : 'owner.plans.kind.monthly')}
                   {!c.active ? ` · ${t('owner.plans.inactive')}` : ''}
                 </AppText>
+                <AppText style={{ fontWeight: '800', fontSize: 20, color: tint }}>€{c.priceEur.toFixed(2)}</AppText>
+                {c.description ? (
+                  <AppText muted numberOfLines={3} style={{ fontSize: 12.5 }}>
+                    {c.description}
+                  </AppText>
+                ) : null}
                 <AppText variant="caption" muted>
                   {t('owner.plans.createdOn', { date: new Date(c.createdAt).toLocaleDateString(lang) })}
                 </AppText>
@@ -139,11 +152,12 @@ export function OwnerPlansScreen() {
 
       <PlanCardModal
         target={sheet}
+        takenColors={(cards.data ?? []).filter((c) => sheet === 'new' || sheet === null || c.id !== sheet.id).map((c) => c.color)}
         onClose={() => setSheet(null)}
-        onSave={(name, kind) =>
+        onSave={(input) =>
           run(async () => {
-            if (sheet !== null && sheet !== 'new') await updateOwnerPlanCard(sheet.id, name, kind);
-            else await createOwnerPlanCard(name, kind);
+            if (sheet !== null && sheet !== 'new') await updateOwnerPlanCard(sheet.id, input);
+            else await createOwnerPlanCard(input);
             setSheet(null);
           })
         }
@@ -173,130 +187,5 @@ export function OwnerPlansScreen() {
         onCancel={() => setConfirmDelete(null)}
       />
     </Screen>
-  );
-}
-
-/** Create/edit popup — same `<Modal transparent>` shell as `AddManagerModal`. */
-function PlanCardModal({
-  target,
-  onClose,
-  onSave,
-  onToggleActive,
-  onAskDelete,
-}: {
-  target: 'new' | OwnerPlanCard | null;
-  onClose: () => void;
-  onSave: (name: string, kind: Kind) => Promise<void>;
-  onToggleActive: (card: OwnerPlanCard) => Promise<void>;
-  onAskDelete: (card: OwnerPlanCard) => void;
-}) {
-  const { t } = useI18n();
-  const theme = useTheme();
-  const editing = target !== null && target !== 'new' ? target : null;
-  const [name, setName] = useState(editing?.name ?? '');
-  const [kind, setKind] = useState<Kind>(editing?.kind ?? 'monthly');
-  const [busy, setBusy] = useState(false);
-  const [wasTarget, setWasTarget] = useState(target);
-
-  // Reset the form whenever a different card (or "new") is opened.
-  if (target !== wasTarget) {
-    setWasTarget(target);
-    setName(editing?.name ?? '');
-    setKind(editing?.kind ?? 'monthly');
-    setBusy(false);
-  }
-
-  const canSave = name.trim().length > 0 && !busy;
-
-  async function guarded(action: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    try {
-      await action();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal visible={target !== null} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg }}>
-        <View style={{ width: '100%', maxWidth: 460, borderRadius: radius.card, backgroundColor: theme.background, padding: spacing.lg, gap: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <AppText variant="display" style={{ fontSize: 22 }}>
-              {t(editing ? 'owner.plans.edit' : 'owner.plans.new')}
-            </AppText>
-            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} style={{ width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' }}>
-              <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
-            </Pressable>
-          </View>
-
-          <View style={{ gap: 4 }}>
-            <AppText variant="caption" style={{ fontWeight: '600' }}>
-              {t('owner.plans.name')}
-            </AppText>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder={t('owner.plans.namePlaceholder')}
-              placeholderTextColor={theme.textMuted}
-              maxLength={60}
-              autoComplete="off"
-              textContentType="none"
-              style={{ minHeight: MIN_TAP, borderWidth: 1.5, borderColor: theme.border, borderRadius: radius.md, paddingHorizontal: spacing.md, color: theme.text, fontSize: 15 }}
-            />
-          </View>
-
-          <View style={{ gap: 4 }}>
-            <AppText variant="caption" style={{ fontWeight: '600' }}>
-              {t('owner.plans.duration')}
-            </AppText>
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              {(['monthly', 'annual'] as const).map((k) => {
-                const selected = kind === k;
-                return (
-                  <Pressable
-                    key={k}
-                    onPress={() => setKind(k)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={{
-                      flex: 1,
-                      minHeight: MIN_TAP,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: radius.md,
-                      borderWidth: 1.5,
-                      borderColor: selected ? theme.primary : theme.border,
-                      backgroundColor: selected ? theme.surfaceAlt : 'transparent',
-                    }}>
-                    <AppText style={{ fontWeight: '700', fontSize: 14, color: selected ? theme.primary : theme.text }}>{t(k === 'annual' ? 'owner.plans.kind.annual' : 'owner.plans.kind.monthly')}</AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          {editing ? (
-            <AppText muted style={{ fontSize: 12.5 }}>
-              {t('owner.plans.editHelp')}
-            </AppText>
-          ) : null}
-
-          <Button label={t('owner.plans.save')} onPress={() => void guarded(() => onSave(name.trim(), kind))} disabled={!canSave} />
-          {editing ? (
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Button
-                variant="secondary"
-                style={{ flex: 1 }}
-                label={t(editing.active ? 'owner.plans.deactivate' : 'owner.plans.activate')}
-                onPress={() => void guarded(() => onToggleActive(editing))}
-                disabled={busy}
-              />
-              <Button variant="dangerSoft" style={{ flex: 1 }} label={t('owner.plans.delete')} onPress={() => onAskDelete(editing)} disabled={busy} />
-            </View>
-          ) : null}
-        </View>
-      </View>
-    </Modal>
   );
 }

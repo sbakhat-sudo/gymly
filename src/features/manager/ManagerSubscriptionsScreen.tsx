@@ -5,6 +5,7 @@ import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { SectionLabel } from '@/components/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ChevronDownIcon, CreditCardIcon, EyeIcon, PlusIcon, SlidersIcon } from '@/components/icons';
@@ -296,7 +297,7 @@ export function ManagerSubscriptionsScreen() {
 
       {rows.error ? <Banner title={t('manager.subscriptions.error')} /> : null}
       {rows.data === undefined && rows.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {rows.data && filtered.length === 0 ? <Banner message={t('manager.subscriptions.empty')} /> : null}
+      {rows.data && filtered.length === 0 ? <EmptyState message={t('manager.subscriptions.empty')} icon={CreditCardIcon} /> : null}
 
       {pageRows.length > 0 ? (
         <View style={{ width: '100%', borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>

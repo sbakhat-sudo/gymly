@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
 import { GroupHeader } from '@/components/GroupHeader';
 import { MessageCircleIcon } from '@/components/icons';
@@ -77,7 +78,7 @@ export function ManagerMessagesSection() {
         </View>
       ) : null}
 
-      {conversations.data && list.length === 0 && !canStart ? <Banner message={t('manager.messages.empty')} /> : null}
+      {conversations.data && list.length === 0 && !canStart ? <EmptyState message={t('manager.messages.empty')} icon={MessageCircleIcon} /> : null}
 
       {list.map((c) => (
         <ConversationRow key={c.conversationId} conversation={c} lang={lang} onOpen={() => setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson') })} />

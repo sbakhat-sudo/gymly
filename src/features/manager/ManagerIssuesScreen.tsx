@@ -5,6 +5,7 @@ import { ActionSheet, type ActionSheetAction } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { DateBadge } from '@/components/DateBadge';
 import { FilterGroup } from '@/components/FilterControls';
 import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, ClockIcon, DownloadIcon, EyeIcon, SlidersIcon } from '@/components/icons';
@@ -247,7 +248,7 @@ export function ManagerIssuesScreen() {
 
       {issues.error ? <Banner title={t('manager.issues.error')} /> : null}
       {issues.data === undefined && issues.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {issues.data && filtered.length === 0 ? <Banner message={t('manager.issues.empty')} /> : null}
+      {issues.data && filtered.length === 0 ? <EmptyState message={t('manager.issues.empty')} /> : null}
 
       {pageRows.length > 0 ? (
         <View style={{ width: '100%', borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>

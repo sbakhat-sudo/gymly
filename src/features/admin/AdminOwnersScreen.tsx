@@ -5,6 +5,7 @@ import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
+import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LayersIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
@@ -132,7 +133,7 @@ export function AdminOwnersScreen() {
       {owners.error ? <Banner title={t('admin.owners.error')} /> : null}
       {actionError ? <Banner title={t('admin.owners.payment.error')} /> : null}
       {owners.data === undefined && owners.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
-      {owners.data && filtered.length === 0 ? <Banner message={t('admin.owners.empty')} /> : null}
+      {owners.data && filtered.length === 0 ? <EmptyState message={t('admin.owners.empty')} icon={LayersIcon} /> : null}
 
       {pageRows.length > 0 ? (
         <View style={{ width: '100%', borderRadius: radius.card, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>
