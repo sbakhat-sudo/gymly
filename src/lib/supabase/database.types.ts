@@ -327,6 +327,21 @@ export interface Database {
         Update: never; // only via manager_update_plan_card()/manager_set_plan_card_active()
         Relationships: [];
       };
+      gym_announcements: {
+        Row: {
+          id: string;
+          site_id: string;
+          created_by: string;
+          title: string;
+          body: string | null;
+          kind: 'info' | 'warning' | 'closure';
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: never; // only via manager_create_announcement()
+        Update: never; // never edited; removed via manager_delete_announcement()
+        Relationships: [];
+      };
       owner_plan_cards: {
         Row: {
           id: string;
@@ -526,12 +541,21 @@ export interface Database {
         Args: { p_limit?: number; p_before?: string | null; p_role?: string | null };
         Returns: {
           event_at: string;
-          event_type: 'checkin' | 'checkout' | 'payment' | 'rating' | 'issue' | 'account_created' | 'activated' | 'deactivated' | 'sign_in';
+          /** A derived event (checkin, payment, ...) or a logged action shaped `entity:insert|update|delete`. */
+          event_type: string;
           actor_id: string;
           actor_name: string;
           actor_role: 'owner' | 'manager' | 'coach' | 'client';
           detail: string | null;
         }[];
+      };
+      manager_create_announcement: {
+        Args: { p_title: string; p_body: string | null; p_kind: 'info' | 'warning' | 'closure'; p_expires_at: string | null };
+        Returns: string;
+      };
+      manager_delete_announcement: {
+        Args: { p_id: string };
+        Returns: undefined;
       };
       chat_get_my_owner: {
         Args: Record<string, never>;

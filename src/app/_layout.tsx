@@ -288,6 +288,13 @@ function NavigatorStack({
             outside the (admin) tab group the same way redemption/[id] sits outside (client)'s. */}
         <Stack.Protected guard={auth.status === 'admin' && !isNative}>
           <Stack.Screen name="pagamento" />
+          {/* Declared here too, not left to auto-discovery: an undeclared route renders fine when pushed from
+              Impostazioni but stays blank on a reload (F5) or a typed address. */}
+          <Stack.Screen name="audit-gps" />
+          <Stack.Screen name="azioni-admin" />
+        </Stack.Protected>
+        <Stack.Protected guard={auth.status === 'active' && auth.profile.role === 'manager' && !isNative}>
+          <Stack.Screen name="capienza" />
         </Stack.Protected>
         <Stack.Screen name="redemption/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="feedback/[checkinId]" options={{ presentation: 'modal' }} />

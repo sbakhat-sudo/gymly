@@ -26,6 +26,8 @@ export interface MySubscription {
   priceEur: number | null;
   planDescription: string | null;
   planTier: PlanCardTier | null;
+  /** The plan card's own colour — null for an old plan that never had one. */
+  planColor: string | null;
   status: SubscriptionStatus;
   startDate: string;
   expiryDate: string;

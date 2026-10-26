@@ -11,11 +11,11 @@ import { useI18n, type TranslationKey } from '@/lib/i18n';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
-import { getActivityFeed, type ActivityEvent, type ActivityEventType, type ActivityRole } from './activity-api';
+import { getActivityFeed, type ActivityEvent, type ActivityRole } from './activity-api';
 
 const PAGE = 20;
 
-const EVENT_KEY: Record<ActivityEventType, TranslationKey> = {
+const EVENT_KEY: Record<string, TranslationKey> = {
   checkin: 'activity.event.checkin',
   checkout: 'activity.event.checkout',
   payment: 'activity.event.payment',
@@ -27,12 +27,68 @@ const EVENT_KEY: Record<ActivityEventType, TranslationKey> = {
   sign_in: 'activity.event.sign_in',
 };
 
+const OP_KEY: Record<string, TranslationKey> = {
+  insert: 'activity.op.insert',
+  update: 'activity.op.update',
+  delete: 'activity.op.delete',
+};
+
+const ENTITY_KEY: Record<string, TranslationKey> = {
+  profile: 'activity.entity.profile',
+  site: 'activity.entity.site',
+  subscription: 'activity.entity.subscription',
+  plan_card: 'activity.entity.plan_card',
+  chain: 'activity.entity.chain',
+  invite: 'activity.entity.invite',
+  coach_note: 'activity.entity.coach_note',
+  rating: 'activity.entity.rating',
+  issue: 'activity.entity.issue',
+  conversation: 'activity.entity.conversation',
+  point_rule: 'activity.entity.point_rule',
+  reward: 'activity.entity.reward',
+  redemption: 'activity.entity.redemption',
+  platform_setting: 'activity.entity.platform_setting',
+};
+
+/** Columns an edit can name, spelled out in plain words; anything else is shown as stored. */
+const COLUMNS = [
+  'full_name', 'first_name', 'last_name', 'phone', 'home_address', 'avatar_url', 'birth_date', 'birth_year', 'location_always',
+  'requested_plan', 'membership_type', 'payment_status', 'subscription_required', 'profile_completed_at', 'role', 'site_id', 'name',
+  'address', 'timezone', 'opening_hours', 'capacity_reference', 'points_enabled', 'manually_open', 'location', 'radius',
+  'proximity_radius', 'band_green_pct', 'band_amber_pct', 'notify_manager_on_threshold', 'plan', 'status', 'approval_status',
+  'card_id', 'plan_type', 'start_date', 'kind', 'active', 'price_eur', 'description', 'color', 'tier', 'duration_days', 'note',
+  'coach_reply', 'manager_note', 'severity', 'resolved_at', 'title', 'cost', 'stock', 'points', 'daily_cap', 'from_time', 'to_time',
+  'weekday_mask', 'default_capacity_reference', 'support_email', 'managers_can_create_cards', 'plan_paid_until', 'plan_status',
+  'hq_address', 'expires_at', 'read_at',
+] as const;
+
 const ROLE_KEY: Record<ActivityRole, TranslationKey> = {
   owner: 'activity.role.owner',
   manager: 'activity.role.manager',
   coach: 'activity.role.coach',
   client: 'activity.role.client',
 };
+
+/** The sentence for an event: a derived one ("è entrato in palestra") or a logged action ("ha modificato il profilo"). */
+function describe(t: ReturnType<typeof useI18n>['t'], type: string): string {
+  const derived = EVENT_KEY[type];
+  if (derived) return t(derived);
+  const [entity = '', op = ''] = type.split(':');
+  if (entity === 'message') return t('activity.log.message');
+  const opKey = OP_KEY[op];
+  const entityKey = ENTITY_KEY[entity];
+  return [opKey ? t(opKey) : op, entityKey ? t(entityKey) : entity].join(' ');
+}
+
+/** The detail line: an edit lists the fields it changed in plain words; everything else shows as stored. */
+function describeDetail(t: ReturnType<typeof useI18n>['t'], type: string, detail: string | null): string | null {
+  if (!detail) return null;
+  if (!type.endsWith(':update')) return detail;
+  return detail
+    .split(',')
+    .map((c) => ((COLUMNS as readonly string[]).includes(c) ? t(`activity.col.${c}` as TranslationKey) : c))
+    .join(', ');
+}
 
 /**
  * "Attività" card for Impostazioni: what the people this role oversees did, newest first — filterable by role,
@@ -101,7 +157,7 @@ export function ActivityCard({ roles }: { roles: ActivityRole[] }) {
               <View
                 key={`${e.type}-${e.actorId}-${e.at}-${i}`}
                 accessible
-                accessibilityLabel={`${e.actorName}, ${t(ROLE_KEY[e.actorRole])}: ${t(EVENT_KEY[e.type])}${e.detail ? `, ${e.detail}` : ''}`}
+                accessibilityLabel={`${e.actorName}, ${t(ROLE_KEY[e.actorRole])}: ${describe(t, e.type)}${describeDetail(t, e.type, e.detail) ? `, ${describeDetail(t, e.type, e.detail)}` : ''}`}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.border }}>
                 <Avatar uri={null} name={e.actorName} size={36} tint={avatarTint(theme, e.actorName)} />
                 <View style={{ flex: 1, gap: 1 }}>
@@ -109,8 +165,8 @@ export function ActivityCard({ roles }: { roles: ActivityRole[] }) {
                     {e.actorName} <AppText muted style={{ fontWeight: '600', fontSize: 12 }}>· {t(ROLE_KEY[e.actorRole])}</AppText>
                   </AppText>
                   <AppText muted style={{ fontSize: 13 }}>
-                    {t(EVENT_KEY[e.type])}
-                    {e.detail ? ` · ${e.detail}` : ''}
+                    {describe(t, e.type)}
+                    {describeDetail(t, e.type, e.detail) ? ` · ${describeDetail(t, e.type, e.detail)}` : ''}
                   </AppText>
                 </View>
                 <AppText variant="caption" muted style={{ textAlign: 'right' }}>
