@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { AddressMapPreview } from '@/components/AddressMapPreview';
 import { AppText } from '@/components/AppText';
@@ -16,6 +16,7 @@ import { avatarTint } from '@/lib/avatar-tint';
 import { isPlausibleName, isPlausiblePhone } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
 import { usePageHeader } from '@/lib/page-header-context';
+import { useSidebarMode } from '@/lib/use-sidebar-mode';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
@@ -169,7 +170,7 @@ function AddManagerModal({ visible, onClose, onCreated }: { visible: boolean; on
               <Button label={t('common.close')} onPress={close} />
             </View>
           ) : (
-            <>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: spacing.md }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Field label={t('auth.signup.fullName')} value={fullName} onChangeText={setFullName} />
               <Field label={t('auth.signup.email')} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
               <Field label={t('manager.people.invite.phoneLabel')} value={whatsapp} onChangeText={setWhatsapp} placeholder={t('manager.people.invite.phonePlaceholder')} />
@@ -198,7 +199,7 @@ function AddManagerModal({ visible, onClose, onCreated }: { visible: boolean; on
 
               <Button label={t('owner.managers.add.submit')} onPress={() => void submit()} disabled={!canSubmit || busy} />
               {busy ? <ActivityIndicator /> : null}
-            </>
+            </ScrollView>
           )}
         </View>
       </View>
@@ -270,6 +271,11 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
   const { t } = useI18n();
   const theme = useTheme();
   const managerId = row?.managerId ?? null;
+  const { width, height } = useWindowDimensions();
+  const stacked = width < 760;
+  // Wide layout: only the roster scrolls (capped to what fits under the pinned header/stats), so the
+  // map never moves. Stacked layout: the whole body scrolls instead.
+  const rosterMaxHeight = Math.max(220, height * 0.92 - 340);
   const detail = useAsync<OwnerManagerDetail | null>(() => (managerId ? getOwnerManagerDetail(managerId) : Promise.resolve(null)), [managerId], managerId !== null);
   const clients = detail.data?.clients ?? [];
   const coaches = detail.data?.coaches ?? [];
@@ -319,7 +325,7 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
           {detail.error ? <Banner title={t('owner.managers.detail.error')} /> : null}
 
           {detail.data ? (
-            <View style={{ gap: spacing.md }}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: spacing.md }} showsVerticalScrollIndicator={false}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                 <StatChip label={t('owner.managers.detail.statClients')} value={clients.length} tint={theme.primary} />
                 <StatChip label={t('owner.managers.detail.statCoaches')} value={coaches.length} tint={theme.band.amber.solid} />
@@ -329,10 +335,13 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
                 <StatChip label={t('owner.managers.detail.statAnnualUnpaid')} value={annualUnpaid} tint={theme.band.red.solid} />
               </View>
 
-              <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}>
-                {/* Left: the only part that scrolls — Right (map + summary) stays put, "non si
-                    muove", so the location is always visible while scanning a long roster. */}
-                <ScrollView style={{ flex: 1.15, maxHeight: 420 }} contentContainerStyle={{ gap: spacing.lg }} showsVerticalScrollIndicator={false}>
+              {/* Side by side on wide screens (roster scrolls, map stays put), stacked on narrow ones. */}
+              <View style={{ flexDirection: stacked ? 'column' : 'row', gap: spacing.lg, alignItems: 'flex-start' }}>
+                <ScrollView
+                  nestedScrollEnabled
+                  style={stacked ? { width: '100%', flexGrow: 0 } : { flex: 1.15, maxHeight: rosterMaxHeight }}
+                  contentContainerStyle={{ gap: spacing.lg }}
+                  showsVerticalScrollIndicator={false}>
                   <View style={{ gap: 4 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                       <IconBadge icon={UsersIcon} tint={theme.primary} size={22} />
@@ -375,7 +384,7 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
                   </View>
                 </ScrollView>
 
-                <View style={{ flex: 0.85, gap: spacing.sm }}>
+                <View style={{ flex: stacked ? undefined : 0.85, width: stacked ? '100%' : undefined, gap: spacing.sm }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                     <IconBadge icon={MapPinIcon} tint={theme.primary} size={22} />
                     <AppText numberOfLines={2} style={{ flex: 1, fontWeight: '700', fontSize: 14 }}>
@@ -390,7 +399,7 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
                     addressQuery={detail.data.address}
                     lat={detail.data.lat !== null ? String(detail.data.lat) : ''}
                     lng={detail.data.lng !== null ? String(detail.data.lng) : ''}
-                    height={300}
+                    height={260}
                   />
                   {detail.data.lat !== null && detail.data.lng !== null ? (
                     <View style={{ alignSelf: 'flex-end', paddingVertical: 3, paddingHorizontal: 9, borderRadius: radius.pill, backgroundColor: theme.surfaceAlt }}>
@@ -399,7 +408,7 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
                   ) : null}
                 </View>
               </View>
-            </View>
+            </ScrollView>
           ) : null}
         </View>
       </View>
@@ -502,6 +511,7 @@ export function OwnerManagersScreen() {
   const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
   const [chatError, setChatError] = useState(false);
   usePageHeader(UsersIcon, t('owner.managers.title'));
+  const isSidebar = useSidebarMode();
 
   // Opens (creating it the first time) the conversation with this Manager — works for every Manager,
   // with or without a saved phone number, which the old WhatsApp-only button needed.
@@ -531,7 +541,8 @@ export function OwnerManagersScreen() {
       refreshing={managers.loading && managers.data !== undefined}>
       <View style={{ paddingTop: spacing.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
         <View style={{ gap: 2, flex: 1 }}>
-          <AppText style={{ fontFamily: fontFamily.display, fontSize: 26 }}>{t('owner.managers.title')}</AppText>
+          {/* Sidebar mode already shows this title in the fixed top bar (`usePageHeader` above). */}
+          {!isSidebar ? <AppText style={{ fontFamily: fontFamily.displaySemi, fontSize: 26 }}>{t('owner.managers.title')}</AppText> : null}
           <AppText muted style={{ fontSize: 13 }}>
             {t('owner.managers.subtitle', { count: rows.length })}
           </AppText>
