@@ -307,8 +307,12 @@ export interface Database {
           id: string;
           site_id: string;
           name: string;
-          price_eur: number;
+          /** Null for an Owner-made card — those carry only name + monthly/annual. */
+          price_eur: number | null;
           duration_days: number;
+          /** Set when this row is the per-site mirror of an Owner card (owner_plan_cards): the
+           * Manager can see and assign it but never edit it. */
+          owner_card_id: string | null;
           /** What the plan actually includes, the Manager's own words — null until they write one. */
           description: string | null;
           /** Hex the Manager picked for this card — null falls back to the deterministic auto-tint
@@ -321,6 +325,19 @@ export interface Database {
         };
         Insert: never; // only via manager_create_plan_card()
         Update: never; // only via manager_update_plan_card()/manager_set_plan_card_active()
+        Relationships: [];
+      };
+      owner_plan_cards: {
+        Row: {
+          id: string;
+          chain_id: string;
+          name: string;
+          kind: 'monthly' | 'annual';
+          active: boolean;
+          created_at: string;
+        };
+        Insert: never; // only via owner_create_plan_card()
+        Update: never; // only via owner_update_plan_card()/owner_set_plan_card_active()
         Relationships: [];
       };
     };
@@ -716,6 +733,30 @@ export interface Database {
       manager_delete_plan_card: {
         Args: { p_card_id: string };
         Returns: undefined;
+      };
+      owner_create_plan_card: {
+        Args: { p_name: string; p_kind: 'monthly' | 'annual' };
+        Returns: string;
+      };
+      owner_update_plan_card: {
+        Args: { p_card_id: string; p_name: string; p_kind: 'monthly' | 'annual' };
+        Returns: undefined;
+      };
+      owner_set_plan_card_active: {
+        Args: { p_card_id: string; p_active: boolean };
+        Returns: undefined;
+      };
+      owner_delete_plan_card: {
+        Args: { p_card_id: string };
+        Returns: undefined;
+      };
+      owner_set_managers_can_create_cards: {
+        Args: { p_allowed: boolean };
+        Returns: undefined;
+      };
+      get_managers_can_create_cards: {
+        Args: Record<string, never>;
+        Returns: boolean;
       };
       manager_set_subscription_status: {
         Args: { p_client_id: string; p_status: 'active' | 'blocked' };

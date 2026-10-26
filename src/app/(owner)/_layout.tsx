@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router/js-tabs';
 
-import { PulseIcon, SlidersIcon, UsersIcon } from '@/components/icons';
+import { CreditCardIcon, PulseIcon, SlidersIcon, UsersIcon } from '@/components/icons';
 import { PillTabBar } from '@/components/PillTabBar';
 import { RoleTopBar } from '@/components/RoleTopBar';
 import { OwnerNotifications } from '@/features/owner/OwnerNotifications';
@@ -41,6 +41,14 @@ export default function OwnerLayout() {
                 title: t('tab.owner.managers'),
                 tabBarAccessibilityLabel: t('tab.owner.managers'),
                 tabBarIcon: ({ color, size }) => <UsersIcon color={color} size={size} />,
+              }}
+            />
+            <Tabs.Screen
+              name="abbonamenti"
+              options={{
+                title: t('tab.owner.plans'),
+                tabBarAccessibilityLabel: t('tab.owner.plans'),
+                tabBarIcon: ({ color, size }) => <CreditCardIcon color={color} size={size} />,
               }}
             />
             <Tabs.Screen

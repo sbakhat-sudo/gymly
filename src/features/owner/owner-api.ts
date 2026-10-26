@@ -205,3 +205,45 @@ export async function renameOwnerChain(name: string): Promise<void> {
   const { error } = await supabase.rpc('owner_rename_chain', { p_name: name });
   if (error) throw error;
 }
+
+/** One subscription card the Owner made — shared by every Manager in the chain. Just a free-text
+ * name, monthly or annual, and the day it was created. */
+export interface OwnerPlanCard {
+  id: string;
+  name: string;
+  kind: 'monthly' | 'annual';
+  active: boolean;
+  createdAt: string;
+}
+
+export async function getOwnerPlanCards(): Promise<OwnerPlanCard[]> {
+  const { data, error } = await supabase.from('owner_plan_cards').select('id, name, kind, active, created_at').order('created_at');
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, kind: r.kind, active: r.active, createdAt: r.created_at }));
+}
+
+export async function createOwnerPlanCard(name: string, kind: 'monthly' | 'annual'): Promise<void> {
+  const { error } = await supabase.rpc('owner_create_plan_card', { p_name: name, p_kind: kind });
+  if (error) throw error;
+}
+
+export async function updateOwnerPlanCard(cardId: string, name: string, kind: 'monthly' | 'annual'): Promise<void> {
+  const { error } = await supabase.rpc('owner_update_plan_card', { p_card_id: cardId, p_name: name, p_kind: kind });
+  if (error) throw error;
+}
+
+export async function setOwnerPlanCardActive(cardId: string, active: boolean): Promise<void> {
+  const { error } = await supabase.rpc('owner_set_plan_card_active', { p_card_id: cardId, p_active: active });
+  if (error) throw error;
+}
+
+export async function deleteOwnerPlanCard(cardId: string): Promise<void> {
+  const { error } = await supabase.rpc('owner_delete_plan_card', { p_card_id: cardId });
+  if (error) throw error;
+}
+
+/** The option: may Managers also create their own subscription cards? Off until the Owner says so. */
+export async function setManagersCanCreateCards(allowed: boolean): Promise<void> {
+  const { error } = await supabase.rpc('owner_set_managers_can_create_cards', { p_allowed: allowed });
+  if (error) throw error;
+}

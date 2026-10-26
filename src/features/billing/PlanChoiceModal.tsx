@@ -73,7 +73,7 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
     setBusy(true);
     setError(null);
     try {
-      const result = await PaymentService.charge({ planName: card.name, priceEur: card.priceEur });
+      const result = await PaymentService.charge({ planName: card.name, priceEur: card.priceEur ?? 0 });
       if (!result.success) throw new Error('payment failed');
       await choosePlan(card.id);
       setStep('choose');
@@ -171,7 +171,7 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
                             {c.name}
                           </AppText>
                           <AppText muted style={{ fontSize: 12.5 }}>
-                            {t('billing.card.subtitle', { price: c.priceEur.toFixed(2), days: c.durationDays })}
+                            {c.priceEur === null ? t('billing.card.subtitleNoPrice', { days: c.durationDays }) : t('billing.card.subtitle', { price: c.priceEur.toFixed(2), days: c.durationDays })}
                           </AppText>
                           {c.description ? (
                             <AppText muted numberOfLines={2} style={{ fontSize: 12, lineHeight: 16, marginTop: 2 }}>
@@ -206,7 +206,7 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
                       </View>
                     ) : null}
                     <AppText style={{ fontWeight: '800', fontSize: 15.5 }}>{card?.name}</AppText>
-                    <AppText muted style={{ fontSize: 12.5 }}>{card ? `€${card.priceEur.toFixed(2)} · ${card.durationDays}g` : ''}</AppText>
+                    <AppText muted style={{ fontSize: 12.5 }}>{card ? `${card.priceEur === null ? '' : `€${card.priceEur.toFixed(2)} · `}${card.durationDays}g` : ''}</AppText>
                     {card?.description ? (
                       <AppText muted numberOfLines={2} style={{ fontSize: 12, lineHeight: 16, marginTop: 2 }}>
                         {card.description}

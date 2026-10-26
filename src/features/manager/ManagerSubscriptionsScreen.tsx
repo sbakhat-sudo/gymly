@@ -19,6 +19,7 @@ import {
   deleteSubscription,
   getManagerClientSubscriptions,
   getManagerPlanCards,
+  getManagersCanCreateCards,
   setPlanCardActive,
   setSubscriptionStatus,
   updatePlanCard,
@@ -83,6 +84,8 @@ export function ManagerSubscriptionsScreen() {
   const theme = useTheme();
   const rows = useAsync(() => getManagerClientSubscriptions(), []);
   const cards = useAsync(() => getManagerPlanCards(), []);
+  // Owner-made cards are read-only here; "nuova carta" only shows when the Owner allows Managers their own.
+  const canCreate = useAsync(() => getManagersCanCreateCards(), []);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
@@ -169,14 +172,16 @@ export function ManagerSubscriptionsScreen() {
       <View style={{ gap: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <SectionLabel>{t('manager.subscriptions.cards.title')}</SectionLabel>
-          <Pressable
-            onPress={() => setCardSheet('new')}
-            accessibilityRole="button"
-            accessibilityLabel={t('manager.subscriptions.cards.new')}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <PlusIcon color={theme.primary} size={14} />
-            <AppText style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('manager.subscriptions.cards.new')}</AppText>
-          </Pressable>
+          {canCreate.data === true ? (
+            <Pressable
+              onPress={() => setCardSheet('new')}
+              accessibilityRole="button"
+              accessibilityLabel={t('manager.subscriptions.cards.new')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <PlusIcon color={theme.primary} size={14} />
+              <AppText style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>{t('manager.subscriptions.cards.new')}</AppText>
+            </Pressable>
+          ) : null}
         </View>
 
         {cards.loading && cards.data === undefined ? <ActivityIndicator /> : null}
@@ -197,7 +202,7 @@ export function ManagerSubscriptionsScreen() {
               return (
                 <Pressable
                   key={c.id}
-                  onPress={() => setCardSheet(c)}
+                  onPress={() => (c.ownerCardId === null ? setCardSheet(c) : undefined)}
                   accessibilityRole="button"
                   accessibilityLabel={c.name}
                   style={({ pressed }) => ({
@@ -229,7 +234,7 @@ export function ManagerSubscriptionsScreen() {
                   <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 14 }}>
                     {c.name}
                   </AppText>
-                  <AppText style={{ fontFamily: fontFamily.display, fontSize: 20, color: tint }}>€{c.priceEur.toFixed(2)}</AppText>
+                  {c.priceEur !== null ? <AppText style={{ fontFamily: fontFamily.display, fontSize: 20, color: tint }}>€{c.priceEur.toFixed(2)}</AppText> : null}
                   <AppText variant="caption" muted>
                     {formatDuration(t, c.durationDays)}
                     {!c.active ? ` · ${t('manager.subscriptions.cards.inactive')}` : ''}
@@ -325,7 +330,7 @@ export function ManagerSubscriptionsScreen() {
         actions={
           activeCards.length === 0
             ? []
-            : activeCards.map((c) => ({ label: `${c.name} — €${c.priceEur.toFixed(2)}`, onPress: () => void assign(c.id), disabled: assigning }))
+            : activeCards.map((c) => ({ label: c.priceEur === null ? c.name : `${c.name} — €${c.priceEur.toFixed(2)}`, onPress: () => void assign(c.id), disabled: assigning }))
         }>
         {activeCards.length === 0 ? (
           <AppText muted style={{ fontSize: 13 }}>
@@ -441,7 +446,7 @@ function PlanCardSheet({
   const theme = useTheme();
   const editing = target !== null && target !== 'new' ? target : null;
   const [name, setName] = useState(editing?.name ?? '');
-  const [price, setPrice] = useState(editing ? String(editing.priceEur) : '');
+  const [price, setPrice] = useState(editing?.priceEur != null ? String(editing.priceEur) : '');
   const [durationUnit, setDurationUnit] = useState<'monthly' | 'annual'>(editing && editing.durationDays % 365 === 0 ? 'annual' : 'monthly');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [tier, setTier] = useState<PlanCardTier>(editing?.tier ?? 'normal');
@@ -453,7 +458,7 @@ function PlanCardSheet({
     setWasTarget(target);
     const next = target !== null && target !== 'new' ? target : null;
     setName(next?.name ?? '');
-    setPrice(next ? String(next.priceEur) : '');
+    setPrice(next?.priceEur != null ? String(next.priceEur) : '');
     setDurationUnit(next && next.durationDays % 365 === 0 ? 'annual' : 'monthly');
     setDescription(next?.description ?? '');
     setTier(next?.tier ?? 'normal');

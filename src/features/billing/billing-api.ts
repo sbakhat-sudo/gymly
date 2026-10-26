@@ -6,8 +6,11 @@ export type PlanCardTier = 'normal' | 'vip' | 'vvip';
 export interface PlanCard {
   id: string;
   name: string;
-  priceEur: number;
+  /** Null for an Owner-made card: those carry only a name and monthly/annual. */
+  priceEur: number | null;
   durationDays: number;
+  /** Set for a card the Owner made — a Manager sees and assigns it but can never edit it. */
+  ownerCardId: string | null;
   /** What the plan includes, the Manager's own words — null until they write one. */
   description: string | null;
   /** Hex the Manager picked for this card — null means "use the deterministic auto-tint instead",
@@ -47,9 +50,9 @@ export async function getMySubscription(): Promise<MySubscriptionState> {
  * caller's site and `active` rows only), same pattern as `gym_chains`: a select policy + RPC-only
  * writes, no read RPC needed. */
 export async function getAvailablePlanCards(): Promise<PlanCard[]> {
-  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, description, color, tier, active').order('price_eur');
+  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, owner_card_id, description, color, tier, active').order('price_eur');
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, description: r.description, color: r.color, tier: r.tier, active: r.active }));
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, ownerCardId: r.owner_card_id, description: r.description, color: r.color, tier: r.tier, active: r.active }));
 }
 
 export async function choosePlan(cardId: string): Promise<void> {
@@ -120,9 +123,9 @@ export async function deleteSubscription(clientId: string): Promise<void> {
 /** The Manager's own catalog, active and retired cards alike (so a retired one still shows up, just
  * not toggleable back on by accident from an "assign" sheet — see `ManagerSubscriptionsScreen.tsx`). */
 export async function getManagerPlanCards(): Promise<PlanCard[]> {
-  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, description, color, tier, active').order('created_at');
+  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, owner_card_id, description, color, tier, active').order('created_at');
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, description: r.description, color: r.color, tier: r.tier, active: r.active }));
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, ownerCardId: r.owner_card_id, description: r.description, color: r.color, tier: r.tier, active: r.active }));
 }
 
 export async function createPlanCard(name: string, priceEur: number, durationDays: number, description: string | null, color: string | null, tier: PlanCardTier): Promise<void> {
@@ -161,4 +164,12 @@ export async function setPlanCardActive(cardId: string, active: boolean): Promis
 export async function deletePlanCard(cardId: string): Promise<void> {
   const { error } = await supabase.rpc('manager_delete_plan_card', { p_card_id: cardId });
   if (error) throw error;
+}
+
+/** Whether the Owner lets Managers make their own cards on top of the Owner's — drives whether the
+ * Manager screen offers "nuova carta" at all (the database refuses it either way). */
+export async function getManagersCanCreateCards(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('get_managers_can_create_cards');
+  if (error) throw error;
+  return data;
 }
