@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
 import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
-import { Avatar } from '@/components/Avatar';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Banner } from '@/components/Banner';
 import { EmptyState } from '@/components/EmptyState';
 import { SectionLabel } from '@/components/Card';
@@ -327,6 +327,7 @@ export function ManagerSubscriptionsScreen() {
         visible={assignTarget !== null}
         title={t('manager.subscriptions.assign.title')}
         subtitle={assignTarget?.fullName ?? undefined}
+        avatar={assignTarget ? { userId: assignTarget.clientId, name: assignTarget.fullName } : undefined}
         onClose={() => setAssignTarget(null)}
         actions={
           activeCards.length === 0
@@ -344,6 +345,7 @@ export function ManagerSubscriptionsScreen() {
         visible={menuTarget !== null}
         title={t('manager.subscriptions.actions.title')}
         subtitle={menuTarget?.fullName ?? undefined}
+        avatar={menuTarget ? { userId: menuTarget.clientId, name: menuTarget.fullName } : undefined}
         onClose={() => setMenuTarget(null)}
         actions={
           menuTarget
@@ -660,7 +662,7 @@ function SubscriptionRow({ row, showDivider, onOpenActions }: { row: ClientSubsc
         backgroundColor: planTint ? `${planTint}1a` : 'transparent',
       }}>
       <View style={{ flex: COL.name, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Avatar uri={null} name={row.fullName} size={28} tint={avatarTint(theme, row.fullName ?? '?')} />
+        <ProfileAvatar userId={row.clientId} name={row.fullName} size={28} tint={avatarTint(theme, row.fullName ?? '?')} />
         <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 13.5, flexShrink: 1 }}>
           {row.fullName || t('common.unnamedPerson')}
         </AppText>

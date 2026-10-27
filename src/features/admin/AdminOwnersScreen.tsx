@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
 import { ActionSheet } from '@/components/ActionSheet';
 import { AppText } from '@/components/AppText';
-import { Avatar } from '@/components/Avatar';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Banner } from '@/components/Banner';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -153,7 +153,8 @@ export function AdminOwnersScreen() {
 
       <ActionSheet
         visible={selected !== null}
-        title={selected?.fullName || t('common.unnamedPerson')}
+        title={selected?.chainName || selected?.fullName || t('common.unnamedPerson')}
+        avatar={selected ? { userId: selected.ownerId, name: selected.chainName ?? selected.fullName } : undefined}
         subtitle={selected?.chainName ?? undefined}
         actions={selected ? actionsFor(selected) : []}
         onClose={() => setSelected(null)}
@@ -162,7 +163,7 @@ export function AdminOwnersScreen() {
       <ConfirmDialog
         visible={confirming !== null}
         title={t('admin.owners.payment.confirm.title')}
-        message={t('admin.owners.payment.confirm.body', { owner: confirming?.fullName || t('common.unnamedPerson') })}
+        message={t('admin.owners.payment.confirm.body', { owner: confirming?.chainName || confirming?.fullName || t('common.unnamedPerson') })}
         confirmLabel={t('admin.owners.payment.markPaid')}
         onConfirm={() => {
           if (confirming && !busy) void run(() => markOwnerPaid(confirming.ownerId));
@@ -174,7 +175,7 @@ export function AdminOwnersScreen() {
         visible={deactivating !== null}
         destructive
         title={t('admin.owners.deactivate.confirm.title')}
-        message={t('admin.owners.deactivate.confirm.body', { owner: deactivating?.fullName || t('common.unnamedPerson') })}
+        message={t('admin.owners.deactivate.confirm.body', { owner: deactivating?.chainName || deactivating?.fullName || t('common.unnamedPerson') })}
         confirmLabel={t('admin.owners.action.deactivate')}
         onConfirm={() => {
           if (deactivating && !busy) void run(() => setOwnerStatus(deactivating.ownerId, 'rejected'));
@@ -202,10 +203,10 @@ function OwnerRow({ row, showDivider, onActions }: { row: AdminOwnerRow; showDiv
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: MIN_TAP, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, gap: spacing.sm, borderTopWidth: showDivider ? 1 : 0, borderTopColor: theme.glassBorder }}>
       <View style={{ flex: COL.name, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Avatar uri={null} name={row.fullName} size={28} tint={avatarTint(theme, row.fullName ?? row.email)} />
+        <ProfileAvatar userId={row.ownerId} name={row.chainName ?? row.fullName} size={28} tint={avatarTint(theme, row.chainName ?? row.fullName ?? row.email)} />
         <View style={{ flexShrink: 1 }}>
           <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 13.5 }}>
-            {row.fullName || t('common.unnamedPerson')}
+            {row.chainName || row.fullName || t('common.unnamedPerson')}
           </AppText>
           <AppText numberOfLines={1} variant="caption" muted>
             {row.email}
@@ -214,7 +215,7 @@ function OwnerRow({ row, showDivider, onActions }: { row: AdminOwnerRow; showDiv
       </View>
       <View style={{ flex: COL.chain }}>
         <AppText numberOfLines={1} style={{ fontSize: 13 }}>
-          {row.chainName ?? '—'}
+          {row.fullName || '—'}
         </AppText>
       </View>
       <View style={{ flex: COL.plan }}>
@@ -235,7 +236,7 @@ function OwnerRow({ row, showDivider, onActions }: { row: AdminOwnerRow; showDiv
         <Pressable
           onPress={onActions}
           accessibilityRole="button"
-          accessibilityLabel={`${t('admin.owners.col.actions')}: ${row.fullName || row.email}`}
+          accessibilityLabel={`${t('admin.owners.col.actions')}: ${row.chainName || row.fullName || row.email}`}
           style={{ minHeight: MIN_TAP, minWidth: MIN_TAP, paddingHorizontal: spacing.md, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderWidth: 1, borderColor: theme.border }}>
           <AppText style={{ fontSize: 13, fontWeight: '700' }}>{t('admin.owners.col.actions')}</AppText>
         </Pressable>

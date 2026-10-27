@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Avatar } from '@/components/Avatar';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Banner } from '@/components/Banner';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
@@ -33,7 +33,7 @@ export function ManagerMessagesSection() {
   const appActive = useAppActive();
   const conversations = useAsync(() => getConversations(), []);
   const owner = useAsync(() => getMyOwner(), []);
-  const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
+  const [chat, setChat] = useState<{ id: string; title: string; avatar?: { userId?: string | null; uri?: string | null } } | null>(null);
   const [startError, setStartError] = useState(false);
 
   const reloadConversations = conversations.reload;
@@ -54,7 +54,7 @@ export function ManagerMessagesSection() {
     setStartError(false);
     try {
       const id = await openConversation(ownerData.ownerId);
-      setChat({ id, title: ownerName });
+      setChat({ id, title: ownerName, avatar: { userId: ownerData.ownerId } });
       conversations.reload();
     } catch {
       setStartError(true);
@@ -81,10 +81,10 @@ export function ManagerMessagesSection() {
       {conversations.data && list.length === 0 && !canStart ? <EmptyState message={t('manager.messages.empty')} icon={MessageCircleIcon} /> : null}
 
       {list.map((c) => (
-        <ConversationRow key={c.conversationId} conversation={c} lang={lang} onOpen={() => setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson') })} />
+        <ConversationRow key={c.conversationId} conversation={c} lang={lang} onOpen={() => setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson'), avatar: { userId: c.otherId, uri: c.otherAvatarUrl } })} />
       ))}
 
-      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} onClose={() => setChat(null)} onChanged={reloadConversations} />
+      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} avatar={chat?.avatar} onClose={() => setChat(null)} onChanged={reloadConversations} />
     </View>
   );
 }
@@ -111,7 +111,7 @@ function ConversationRow({ conversation, lang, onOpen }: { conversation: ChatCon
         borderColor: theme.glassBorder,
         opacity: pressed ? 0.85 : 1,
       })}>
-      <Avatar uri={null} name={conversation.otherName} size={44} tint={avatarTint(theme, conversation.otherName ?? conversation.otherId)} />
+      <ProfileAvatar userId={conversation.otherId} uri={conversation.otherAvatarUrl} name={conversation.otherName} size={44} tint={avatarTint(theme, conversation.otherName ?? conversation.otherId)} />
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm }}>
           <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 16, flexShrink: 1 }}>

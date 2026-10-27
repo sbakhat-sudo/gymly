@@ -9,6 +9,7 @@ import { FadeSlideIn } from '@/components/FadeSlideIn';
 import { GroupHeader } from '@/components/GroupHeader';
 import { CheckIcon, ChevronDownIcon, ClockIcon, CreditCardIcon, InboxIcon, LayersIcon, PulseIcon, UsersIcon, XIcon } from '@/components/icons';
 import { NotificationBell } from '@/components/NotificationBell';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Screen } from '@/components/Screen';
 import { decorativeA11yProps } from '@/lib/a11y';
 import { formatRelativeTime } from '@/lib/format';
@@ -312,9 +313,10 @@ function ActionHeroCard({
           {ownersPending.slice(0, 3).map((o) => (
             <RequestRow
               key={o.userId}
+              userId={o.userId}
               icon={UsersIcon}
-              title={o.fullName ?? t('common.unnamedPerson')}
-              subtitle={t('admin.dashboard.action.request.owner')}
+              title={(o.gymName ?? o.fullName) ?? t('common.unnamedPerson')}
+              subtitle={o.email ?? t('admin.dashboard.action.request.owner')}
               createdAt={o.createdAt}
               busy={busyId === o.userId}
               onApprove={() => onApproveOwner(o)}
@@ -331,6 +333,7 @@ function ActionHeroCard({
  * request sits as a distinct little card on top of the hero in the reference design. */
 function RequestRow({
   icon,
+  userId,
   title,
   subtitle,
   createdAt,
@@ -339,6 +342,8 @@ function RequestRow({
   onDetails,
 }: {
   icon: IconType;
+  /** Whose request it is: their photo replaces the icon. */
+  userId?: string;
   title: string;
   subtitle: string;
   createdAt: string;
@@ -351,7 +356,7 @@ function RequestRow({
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: theme.surface, borderRadius: radius.lg, padding: spacing.sm }}>
-      <IconBadge icon={icon} tint={theme.primary} size={34} />
+      {userId ? <ProfileAvatar userId={userId} name={title} size={34} /> : <IconBadge icon={icon} tint={theme.primary} size={34} />}
       <View style={{ flex: 1, gap: 1 }}>
         <AppText numberOfLines={1} style={{ fontSize: 14, fontWeight: '700', color: theme.text }}>
           {title}

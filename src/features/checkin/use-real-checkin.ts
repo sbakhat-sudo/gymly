@@ -9,7 +9,7 @@ import { computeCheckoutGoalMessage } from '@/lib/domain/weekly-goal';
 import { useAppActive, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { logger } from '@/lib/logger';
-import { addCheckinResponseListener, cancelRepeatingReminders, requestAlertPermission, scheduleRepeatingStillHereReminders } from '@/lib/notifications';
+import { addCheckinResponseListener, cancelRepeatingReminders, hasPendingStillHereReminders, requestAlertPermission, scheduleRepeatingStillHereReminders } from '@/lib/notifications';
 import { storage } from '@/lib/storage';
 
 import type { CheckinNotice, UseCheckinResult } from './use-checkin';
@@ -49,11 +49,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * that is exactly the moment the feature is used. The Coach presence flow intentionally has none of
  * this — a coach checks in/out freely with no reminder.
  *
- * A real Client is NEVER auto-checked-out, unlike the guest/mock flow (`use-checkin.ts`) — a
- * deliberate, explicit product decision: a forgotten check-in just keeps nagging every 10 minutes
- * instead of silently closing itself, even after hours. `resolveCheckinPhase`'s `autoCheckedOut`
- * phase is capped back down to `awaitingConfirmation` below for exactly that reason; check-out here
- * is always the Client's own manual action.
+ * A real Client is checked out by the SERVER, never by a timer here (a confirmed product decision):
+ * the moment the gym closes, and after 3 hours inside (`close_checkins()`, run every minute).
+ * This hook only notices it: while a check-in is open it re-reads it every 30 seconds, and when the
+ * server has closed it the screen goes back to "check-in" with a notice and the leftover reminders
+ * are cancelled. Until then `resolveCheckinPhase`'s `autoCheckedOut` phase (the mock flow's 105
+ * minutes) is capped back down to `awaitingConfirmation` below. A manual check-out is always possible.
  */
 export function useRealCheckin(site: { site_id: string; name: string } | null): UseCheckinResult {
   const auth = useAuth();
@@ -68,6 +69,7 @@ export function useRealCheckin(site: { site_id: string; name: string } | null): 
   const notifIds = useRef<readonly string[]>(NO_IDS);
 
   const userId = auth.status === 'active' ? auth.session.user.id : null;
+  const userEmail = auth.status === 'active' ? (auth.session.user.email ?? null) : null;
   const siteId = site?.site_id ?? null;
 
   useEffect(() => {
@@ -89,6 +91,58 @@ export function useRealCheckin(site: { site_id: string; name: string } | null): 
   const phase: CheckinPhase | null = rawPhase === 'autoCheckedOut' ? 'awaitingConfirmation' : rawPhase;
   const elapsedSeconds = record && siteId ? elapsedSecondsSince({ siteId, checkinAt: record.checkinAt, lastConfirmedAt: record.lastConfirmedAt }, now) : 0;
 
+  // The server checks the Client out when the gym closes or after 3 hours: while a check-in is open, look again every
+  // 30 seconds (and as soon as the app comes back to the foreground) and, once it is gone, show the check-in screen
+  // again with a notice and drop the reminders that were still waiting.
+  useEffect(() => {
+    if (!userId || !siteId || !record || !appActive) return;
+    let alive = true;
+    const openId = record.id;
+    const check = (): void => {
+      getOpenCheckin(userId, siteId, 'client').then(
+        async (current) => {
+          if (!alive || (current && current.id === openId)) return;
+          if (current) {
+            setRecord(current);
+            return;
+          }
+          setRecord(null);
+          setNotice('autoCheckedOut');
+          try {
+            await cancelRepeatingReminders(notifIds.current);
+            notifIds.current = NO_IDS;
+            await storage.remove('realCheckinNotificationIds');
+          } catch (e) {
+            logger.error('checkin.auto_checkout_cleanup_failed', e);
+          }
+        },
+        () => undefined
+      );
+    };
+    check();
+    const timer = setInterval(check, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [userId, siteId, record, appActive]);
+
+  // A check-in that is still open but whose reminders are gone (cleared by mistake, or the phone restarted) gets them
+  // again, from the moment of the check-in itself — so "sei ancora in palestra?" never goes missing.
+  const restoredFor = useRef<number | null>(null);
+  useEffect(() => {
+    if (!record || !userId || !site || restoredFor.current === record.id) return;
+    restoredFor.current = record.id;
+    void (async () => {
+      if (await hasPendingStillHereReminders(userId)) return;
+      const ids = await scheduleRepeatingStillHereReminders(lang, site.name, userId, userEmail, Date.parse(record.checkinAt));
+      if (ids.length > 0) {
+        notifIds.current = ids;
+        await storage.set('realCheckinNotificationIds', ids);
+      }
+    })();
+  }, [record, userId, userEmail, site, lang]);
+
   async function doCheckIn(): Promise<void> {
     if (!userId || !siteId || !site) return;
     setNotice(null);
@@ -103,7 +157,7 @@ export function useRealCheckin(site: { site_id: string; name: string } | null): 
         setRecord(next);
         const permission = await requestAlertPermission();
         if (permission === 'granted') {
-          const ids = await scheduleRepeatingStillHereReminders(lang, site.name);
+          const ids = await scheduleRepeatingStillHereReminders(lang, site.name, userId, userEmail);
           notifIds.current = ids;
           await storage.set('realCheckinNotificationIds', ids);
         }
@@ -176,14 +230,14 @@ export function useRealCheckin(site: { site_id: string; name: string } | null): 
   }
 
   async function doConfirmStillHere(): Promise<void> {
-    if (!record || !site) return;
+    if (!record || !site || !userId) return;
     setNotice(null);
     const nowIso = await realConfirmStillHere(record.id);
     setRecord({ ...record, lastConfirmedAt: nowIso });
     await cancelRepeatingReminders(notifIds.current);
     const permission = await requestAlertPermission();
     if (permission === 'granted') {
-      const ids = await scheduleRepeatingStillHereReminders(lang, site.name);
+      const ids = await scheduleRepeatingStillHereReminders(lang, site.name, userId, userEmail);
       notifIds.current = ids;
       await storage.set('realCheckinNotificationIds', ids);
     } else {
@@ -194,16 +248,19 @@ export function useRealCheckin(site: { site_id: string; name: string } | null): 
 
   // "Latest" ref so the OS-triggered action buttons (registered once) never act on stale state —
   // same pattern as `use-checkin.ts`.
-  const latest = useRef({ doCheckOut, doConfirmStillHere });
+  const latest = useRef({ doCheckOut, doConfirmStillHere, userId });
   useEffect(() => {
-    latest.current = { doCheckOut, doConfirmStillHere };
+    latest.current = { doCheckOut, doConfirmStillHere, userId };
   });
   useEffect(() => {
-    return addCheckinResponseListener({
-      onStillHereYes: () => void latest.current.doConfirmStillHere(),
-      onStillHereNo: () => void latest.current.doCheckOut(),
-      onProximityCheckin: () => {},
-    });
+    return addCheckinResponseListener(
+      {
+        onStillHereYes: () => void latest.current.doConfirmStillHere(),
+        onStillHereNo: () => void latest.current.doCheckOut(),
+        onProximityCheckin: () => {},
+      },
+      () => latest.current.userId
+    );
   }, []);
 
   return {

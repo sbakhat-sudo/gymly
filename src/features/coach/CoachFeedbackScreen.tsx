@@ -228,7 +228,7 @@ function FeedbackTableRow({ entry, showDivider, lang, onOpen }: { entry: CoachRa
       </View>
 
       <View style={{ flex: COL.client, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Avatar uri={null} name={clientLabel} size={28} tint={avatarTint(theme, clientLabel)} />
+        <Avatar uri={entry.clientAvatarUrl} name={clientLabel} size={28} tint={avatarTint(theme, clientLabel)} />
         <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 13.5, flexShrink: 1 }}>
           {clientLabel}
         </AppText>
@@ -305,7 +305,7 @@ function FeedbackDetailSheet({
   const clientLabel = entry.clientName || t('common.unnamedPerson');
 
   return (
-    <ActionSheet visible title={t('coach.feedback.fromClient', { name: clientLabel })} actions={[]} onClose={close}>
+    <ActionSheet visible title={t('coach.feedback.fromClient', { name: clientLabel })} avatar={{ uri: entry.clientAvatarUrl, name: clientLabel }} actions={[]} onClose={close}>
       <View style={{ gap: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <AppText variant="caption" muted>

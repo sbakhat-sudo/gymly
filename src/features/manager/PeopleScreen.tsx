@@ -19,9 +19,11 @@ import { useI18n } from '@/lib/i18n';
 import { logger } from '@/lib/logger';
 import { useAsync } from '@/lib/use-async';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
+import { downloadXlsx } from '@/lib/xlsx';
 
 import { ManagerNotifications } from './ManagerNotifications';
-import { createMember, deletePerson, getRoster, setPersonStatus, type NewMember, type RosterEntry } from './manager-api';
+import { createMember, deletePerson, getPendingRequests, getRoster, setPersonStatus, type NewMember, type RosterEntry } from './manager-api';
+import { PendingRequestsPanel } from './PendingRequestsPanel';
 import { roleColor } from './role-colors';
 
 export function PeopleScreen() {
@@ -30,6 +32,11 @@ export function PeopleScreen() {
   const siteId = auth.status === 'active' ? auth.profile.siteId : null;
 
   const roster = useAsync(() => (siteId ? getRoster(siteId) : Promise.resolve([])), [siteId], siteId !== null);
+  const requests = useAsync(() => (siteId ? getPendingRequests(siteId) : Promise.resolve([])), [siteId], siteId !== null);
+  function reloadAll(): void {
+    roster.reload();
+    requests.reload();
+  }
   const coaches = roster.data?.filter((r) => r.role === 'coach') ?? [];
   const clients = roster.data?.filter((r) => r.role === 'client') ?? [];
 
@@ -78,20 +85,11 @@ export function PeopleScreen() {
       p.activatedAt ? formatShortDate(lang, p.activatedAt) : '',
       p.deactivatedAt ? formatShortDate(lang, p.deactivatedAt) : '',
     ]);
-    const escape = (cell: string): string => `"${cell.replace(/"/g, '""')}"`;
-    // A leading UTF-8 BOM, or Excel renders accented characters (à, è, ò…) as garbled text.
-    const csv = '﻿' + [header, ...rows].map((row) => row.map(escape).join(',')).join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${t('manager.people.title').toLowerCase()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadXlsx(t('manager.people.title').toLowerCase(), t('manager.people.title'), header, rows);
   }
 
   return (
-    <Screen onRefresh={roster.reload} refreshing={roster.loading && roster.data !== undefined}>
+    <Screen onRefresh={reloadAll} refreshing={roster.loading && roster.data !== undefined}>
       <View style={{ paddingTop: spacing.xxl, gap: spacing.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <ScreenHeader icon={UsersIcon} label={t('manager.people.title')} notifications={<ManagerNotifications />} />
         {roster.data && roster.data.length > 0 ? <Button label={t('manager.people.export')} variant="secondary" onPress={exportCsv} /> : null}
@@ -100,6 +98,8 @@ export function PeopleScreen() {
       {roster.error ? <Banner title={t('manager.people.error')} /> : null}
       {roster.data === undefined && roster.loading ? <ActivityIndicator style={{ marginTop: spacing.xl }} /> : null}
       {deleteError ? <Banner title={t('manager.people.delete.error')} /> : null}
+
+      {requests.data ? <PendingRequestsPanel requests={requests.data} onChanged={reloadAll} /> : null}
 
       {roster.data ? (
         <>
@@ -111,6 +111,7 @@ export function PeopleScreen() {
       <ActionSheet
         visible={sheetPerson !== null}
         title={sheetPerson?.fullName ?? t('common.unnamedPerson')}
+        avatar={sheetPerson ? { userId: sheetPerson.userId, uri: sheetPerson.avatarUrl, name: sheetPerson.fullName } : undefined}
         actions={[
           {
             label: t(sheetPerson?.status === 'rejected' ? 'manager.people.reactivate' : 'manager.people.deactivate'),

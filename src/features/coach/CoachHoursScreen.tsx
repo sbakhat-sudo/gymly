@@ -14,6 +14,7 @@ import { useAppActive, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { useAsync } from '@/lib/use-async';
 import { radius, spacing, useTheme } from '@/lib/theme';
+import { downloadXlsx } from '@/lib/xlsx';
 
 /** How tall the shift list grows before it scrolls inside its own card instead of pushing the rest
  * of the page down — a `maxHeight` is safe here (unlike the Manager Feedback coach card, which needed
@@ -63,16 +64,7 @@ export function CoachHoursScreen() {
       formatHoursDuration(intervalSeconds(s.checkinAt, s.checkoutAt, now)),
       t(s.checkoutAt ? 'manager.workHours.status.done' : 'manager.workHours.status.open'),
     ]);
-    const escape = (cell: string): string => `"${cell.replace(/"/g, '""')}"`;
-    // A leading UTF-8 BOM, or Excel renders accented characters (à, è, ò…) as garbled text.
-    const csv = '﻿' + [header, ...rows].map((row) => row.map(escape).join(',')).join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${t('coach.hours.title').toLowerCase()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadXlsx(t('coach.hours.title').toLowerCase(), t('coach.hours.title'), header, rows);
   }
 
   return (

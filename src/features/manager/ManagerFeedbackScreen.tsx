@@ -20,6 +20,7 @@ import { useI18n, type Lang } from '@/lib/i18n';
 import { isOnDateKey, useSelectedDate } from '@/lib/selected-date-context';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
+import { downloadXlsx } from '@/lib/xlsx';
 
 import { ManagerNotifications } from './ManagerNotifications';
 import { getRatings, type ManagerRatingEntry } from './manager-api';
@@ -38,10 +39,6 @@ const SORT_LABEL_KEY = {
   highest: 'manager.feedback.sortHighest',
   lowest: 'manager.feedback.sortLowest',
 } as const;
-
-function escapeCsvCell(cell: string): string {
-  return `"${cell.replace(/"/g, '""')}"`;
-}
 
 /** Read-only on the rating itself — the Manager's only write here is a note FOR the Coach. There is
  * no field, button, or RPC anywhere in this screen that reaches the Client. One row per rating in a
@@ -110,14 +107,7 @@ export function ManagerFeedbackScreen() {
       String(r.rating),
       r.comment ?? '',
     ]);
-    const csv = '﻿' + [header, ...rows].map((row) => row.map(escapeCsvCell).join(',')).join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${t('manager.feedback.title').toLowerCase()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadXlsx(t('manager.feedback.title').toLowerCase(), t('manager.feedback.title'), header, rows);
   }
 
   return (
@@ -289,7 +279,7 @@ function FeedbackTableRow({ entry, showDivider, lang, onOpen }: { entry: Manager
       </View>
 
       <View style={{ flex: COL.client, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Avatar uri={null} name={clientLabel} size={28} tint={avatarTint(theme, clientLabel)} />
+        <Avatar uri={entry.clientAvatarUrl} name={clientLabel} size={28} tint={avatarTint(theme, clientLabel)} />
         <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 13.5, flexShrink: 1 }}>
           {clientLabel}
         </AppText>
@@ -341,7 +331,7 @@ function FeedbackDetailSheet({ entry, onClose, lang }: { entry: ManagerRatingEnt
   const clientLabel = entry.clientName || t('common.unnamedPerson');
 
   return (
-    <ActionSheet visible title={t('manager.feedback.fromClient', { name: clientLabel })} actions={[]} onClose={onClose}>
+    <ActionSheet visible title={t('manager.feedback.fromClient', { name: clientLabel })} avatar={{ uri: entry.clientAvatarUrl, name: clientLabel }} actions={[]} onClose={onClose}>
       <View style={{ gap: spacing.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <AppText variant="caption" muted>

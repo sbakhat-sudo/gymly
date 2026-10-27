@@ -8,6 +8,7 @@ import { fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 
 import { AppText } from './AppText';
 import { Button } from './Button';
+import { ProfileAvatar } from './ProfileAvatar';
 
 export interface ActionSheetAction {
   label: string;
@@ -20,6 +21,8 @@ interface ActionSheetProps {
   visible: boolean;
   title: string;
   subtitle?: string;
+  /** When the sheet is about a person: their photo beside the title (looked up by `userId`, or `uri` when already known). */
+  avatar?: { userId?: string | null; uri?: string | null; name: string | null };
   actions: ActionSheetAction[];
   onClose: () => void;
   /** Extra content below the title, above the actions — e.g. a rename text field. */
@@ -27,7 +30,7 @@ interface ActionSheetProps {
 }
 
 /** Same bottom-sheet shell as ConfirmDialog, with a list of actions instead of a fixed confirm/cancel pair. */
-export function ActionSheet({ visible, title, subtitle, actions, onClose, children }: ActionSheetProps) {
+export function ActionSheet({ visible, title, subtitle, avatar, actions, onClose, children }: ActionSheetProps) {
   const theme = useTheme();
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
@@ -69,9 +72,12 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose, childr
                 {...decorativeA11yProps}
                 style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: theme.borderStrong, alignSelf: 'center', marginBottom: 6 }}
               />
-              <AppText accessibilityRole="header" style={{ fontFamily: fontFamily.display, fontSize: 20, lineHeight: 25, letterSpacing: -0.04 * 20 }}>
-                {title}
-              </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                {avatar ? <ProfileAvatar userId={avatar.userId} uri={avatar.uri} name={avatar.name} size={48} /> : null}
+                <AppText accessibilityRole="header" style={{ flex: 1, fontFamily: fontFamily.display, fontSize: 20, lineHeight: 25, letterSpacing: -0.04 * 20 }}>
+                  {title}
+                </AppText>
+              </View>
               {subtitle ? (
                 <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
                   {subtitle}

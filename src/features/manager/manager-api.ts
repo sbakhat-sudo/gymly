@@ -113,6 +113,8 @@ export async function setSiteLocation(siteId: string, lat: number, lng: number, 
 export interface PendingRequest {
   userId: string;
   fullName: string | null;
+  /** The exact address the member gave when asking to join. */
+  homeAddress: string | null;
   createdAt: string;
 }
 
@@ -122,13 +124,13 @@ export interface PendingRequest {
 export async function getPendingRequests(siteId: string): Promise<PendingRequest[]> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, created_at')
+    .select('id, full_name, home_address, created_at')
     .eq('site_id', siteId)
     .eq('status', 'pending')
     .eq('role', 'client')
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return data.map((r) => ({ userId: r.id, fullName: r.full_name, createdAt: r.created_at }));
+  return data.map((r) => ({ userId: r.id, fullName: r.full_name, homeAddress: r.home_address, createdAt: r.created_at }));
 }
 
 export async function approveRequest(userId: string): Promise<void> {
@@ -361,6 +363,7 @@ export interface ManagerRatingEntry {
   id: number;
   createdAt: string;
   clientName: string;
+  clientAvatarUrl: string | null;
   coachId: string;
   coachName: string;
   coachAvatarUrl: string | null;
@@ -374,7 +377,7 @@ export interface ManagerRatingEntry {
  * `profiles` lookup for every distinct coach in the result — RLS already lets a Manager read their
  * own site's profiles (`profiles_select_by_manager`), so this needs no new grant or migration. */
 export async function getRatings(): Promise<ManagerRatingEntry[]> {
-  const { data, error } = await supabase.rpc('manager_get_ratings');
+  const { data, error } = await supabase.rpc('manager_get_ratings_with_photo');
   if (error) throw error;
   if (data.length === 0) return [];
 
@@ -393,6 +396,7 @@ export async function getRatings(): Promise<ManagerRatingEntry[]> {
     id: r.id,
     createdAt: r.created_at,
     clientName: r.client_name,
+    clientAvatarUrl: r.client_avatar_url,
     coachId: r.coach_id,
     coachName: r.coach_name,
     coachAvatarUrl: avatarByCoachId.get(r.coach_id) ?? null,
@@ -459,4 +463,11 @@ export async function resolveIssue(issueId: number): Promise<void> {
 export async function reopenIssue(issueId: number): Promise<void> {
   const { error } = await supabase.rpc('manager_reopen_issue', { p_issue_id: issueId });
   if (error) throw error;
+}
+
+/** The address saved for the gym (typed by the Owner when adding the Manager), or `null` if none. */
+export async function getSiteAddress(siteId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('sites').select('address').eq('site_id', siteId).single();
+  if (error) throw error;
+  return data.address?.trim() || null;
 }

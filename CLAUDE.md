@@ -68,6 +68,11 @@ Members see only a **band** (Libera / Moderata / Affollata), never a number of p
     client's location, and the embed is a static URL with no API key, no JS SDK, no tracking script loaded into
     this app. Everything else in this constraint (no fetch/XHR/WebSocket, no analytics/trackers, no 3rd-party
     SDKs) still holds everywhere else in the app, including every other Manager/Coach/Admin screen.
+  - **Deliberate, explicit exception**: the staff first-login profile form (`CompleteProfileGate.tsx`) shows
+    address suggestions while typing, from the `address-suggest` Edge Function
+    (`supabase/functions/address-suggest/index.ts`), which asks Photon (OpenStreetMap data) server-side — the
+    app itself still only talks to Supabase (`src/lib/supabase/address-suggest.ts`). Confirmed explicitly with
+    the user; only the text typed in that one field leaves, signed-in callers only, nothing stored.
   - **Deliberate, explicit exception**: the Owner's "Aggiungi Manager" flow
     (`supabase/functions/owner-create-manager/index.ts`) is this project's first Supabase Edge
     Function — the one place that creates an Auth account on behalf of someone else, which genuinely
@@ -122,19 +127,17 @@ src/
   (`domain/checkin.ts#resolveCheckinPhase`), never from a running background timer — consistent with
   constraint 1. The two local, actionable notifications (`notifications.ts#scheduleCheckinReminders`)
   are a best-effort nudge on top of that, not the source of truth.
-  - **A real (authenticated) Client is different and explicitly, deliberately NOT auto-checked-out,
-    ever** — a confirmed product decision, not an oversight: a forgotten check-in just keeps nagging
-    (see below) instead of silently closing itself, even after hours. `use-real-checkin.ts` caps
-    `resolveCheckinPhase`'s result at `'awaitingConfirmation'`, and the server-side `close_stale_checkins`
-    cron job that used to auto-close stale client check-ins after 105 minutes has been unscheduled
-    entirely (`20261024000000_remove_client_auto_checkout.sql`). Instead of the mock flow's one-off
-    90min+105min notification pair, a real Client gets a bounded series of "sei ancora qui?" reminders
-    every 10 minutes from the 90-minute mark for up to 2 more hours
-    (`notifications.ts#scheduleRepeatingStillHereReminders`) — capped, not infinite, to stay well under
-    iOS's ~64 pending-local-notification limit; check-out is always the Client's own manual action. The
-    Manager's live occupancy still doesn't lie forever despite this: `get_live_band`/`get_weekly_stats`
-    already exclude any check-in open longer than 12 hours from the live count (a display-only filter,
-    never a write) regardless of whether the row itself ever gets manually closed.
+  - **A real (authenticated) Client is checked out by the server, not by a timer in the app** — a confirmed
+    product decision (it replaces the earlier "never auto-checked-out" rule): `close_checkins()` (pg_cron,
+    every minute, `20261108010000_client_auto_checkout.sql`) closes a Client's open check-in the moment the gym is
+    closed (`site_is_open()` is false: manual switch off or outside opening hours) and at exactly check-in + 3 hours;
+    a Coach's too when the gym closes (no 3-hour limit — `CoachPresenceScreen.tsx` polls the same way).
+    `use-real-checkin.ts` caps `resolveCheckinPhase`'s result at `'awaitingConfirmation'` and, while a check-in is
+    open, re-reads it every 30 seconds: once the server has closed it the screen returns to "check-in" with a notice
+    and the pending reminders are cancelled. Reminders: "sei ancora qui?" at the 90-minute mark, then every 10
+    minutes until the 3-hour mark (`notifications.ts#scheduleRepeatingStillHereReminders`, a bounded flat list to
+    stay well under iOS's ~64 pending-local-notification limit). Manual check-out is always possible. Nobody can check
+    in while the gym is closed either (a trigger on `checkins`, `20261107070000_checkin_only_when_open.sql`).
   - The same "sei ancora qui?" content/style also surfaces in-app the moment the Client opens the app —
     `RealClientCheckInScreen.tsx`'s `ConfirmDialog` renders automatically whenever `phase ===
     'awaitingConfirmation'`, and `ClientNotifications.tsx` (a bell on the Live tab, same pattern as

@@ -10,7 +10,7 @@ import { CheckInButton } from '@/features/checkin/CheckInButton';
 import { useAuth } from '@/lib/auth/auth-context';
 import { getOpenCheckin, getOwnCheckinHistory, realCheckIn, realCheckOut, type OpenCheckin } from '@/lib/checkins-api';
 import { elapsedSecondsSince, formatStopwatch, intervalSeconds, startOfWeek } from '@/lib/domain/checkin';
-import { usePolledSiteStatus } from '@/lib/gym-status';
+import { isGymOpenNow, usePolledSiteStatus } from '@/lib/gym-status';
 import { useAppActive, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { usePageHeader } from '@/lib/page-header-context';
@@ -69,10 +69,42 @@ export function CoachPresenceScreen() {
     };
   }, [userId, siteId]);
 
+  // The server checks a Coach out the moment the gym closes: while a shift is open, look again every 30 seconds and,
+  // once it is gone, go back to "check-in" with a notice.
+  const [autoClosed, setAutoClosed] = useState(false);
+  useEffect(() => {
+    if (!userId || !siteId || !record || !appActive) return;
+    let alive = true;
+    const openId = record.id;
+    const check = (): void => {
+      getOpenCheckin(userId, siteId, 'coach').then(
+        (current) => {
+          if (!alive || (current && current.id === openId)) return;
+          if (current) {
+            setRecord(current);
+            return;
+          }
+          setRecord(null);
+          setAutoClosed(true);
+          shifts.reload();
+        },
+        () => undefined
+      );
+    };
+    check();
+    const timer = setInterval(check, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `shifts.reload` is a fresh function every render; only the open shift and who is signed in should restart this.
+  }, [userId, siteId, record, appActive]);
+
   async function toggle(): Promise<void> {
     if (!userId || !siteId) return;
     setBusy(true);
     setError(false);
+    setAutoClosed(false);
     try {
       if (record) {
         await realCheckOut(record.id);
@@ -90,6 +122,8 @@ export function CoachPresenceScreen() {
   }
 
   const checkedIn = record !== null && record !== undefined;
+  // Nobody checks in while the gym is closed (the database refuses it too); ending a shift stays possible.
+  const closedBlock = !checkedIn && site !== null && !isGymOpenNow(site, now);
   const elapsedLabel = record ? formatStopwatch(elapsedSecondsSince({ siteId: siteId ?? '', checkinAt: record.checkinAt, lastConfirmedAt: record.checkinAt }, now)) : null;
 
   // Today/this-week/weekly-average, all from the same real shift history `CoachHoursScreen`'s
@@ -117,6 +151,8 @@ export function CoachPresenceScreen() {
         </AppText>
       ) : null}
 
+      {autoClosed ? <Banner message={t('coach.presence.autoClosed')} /> : null}
+      {closedBlock ? <Banner message={t('checkin.closed')} /> : null}
       {error ? <Banner message={t('checkin.error.generic')} /> : null}
 
       <View style={{ flexDirection: isSidebar ? 'row' : 'column', alignItems: isSidebar ? 'stretch' : undefined, gap: spacing.lg }}>
@@ -133,7 +169,7 @@ export function CoachPresenceScreen() {
         <View style={{ flex: isSidebar ? 1 : undefined, alignItems: 'center', gap: spacing.sm }}>
           <CheckInButton
             checkedIn={checkedIn}
-            busy={busy || record === undefined}
+            busy={busy || record === undefined || closedBlock}
             elapsedLabel={elapsedLabel}
             label={checkedIn ? t('checkin.button.out') : t('checkin.button.in')}
             accessibilityLabel={t(checkedIn ? 'coach.presence.out.a11y' : 'coach.presence.in.a11y')}

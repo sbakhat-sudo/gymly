@@ -4,7 +4,7 @@ import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, TextInput, u
 
 import { AddressMapPreview } from '@/components/AddressMapPreview';
 import { AppText } from '@/components/AppText';
-import { Avatar } from '@/components/Avatar';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Banner } from '@/components/Banner';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/Button';
@@ -244,7 +244,7 @@ function ClientRow({ client }: { client: OwnerClient }) {
         borderColor: theme.glassBorder,
         padding: spacing.sm,
       }}>
-      <Avatar uri={null} name={client.fullName} size={30} tint={avatarTint(theme, client.fullName ?? '?')} />
+      <ProfileAvatar userId={client.id} name={client.fullName} size={30} tint={avatarTint(theme, client.fullName ?? '?')} />
       <View style={{ flex: 1 }}>
         <AppText numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '700' }}>
           {client.fullName || t('common.unnamedPerson')}
@@ -292,13 +292,16 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg }}>
         <View style={{ width: '100%', maxWidth: 920, maxHeight: '92%', borderRadius: radius.card, backgroundColor: theme.background, padding: spacing.lg, gap: spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <View style={{ flexShrink: 1, gap: 2 }}>
-              <AppText variant="display" style={{ fontSize: 20 }} numberOfLines={1}>
-                {t('owner.managers.detail.title')}
-              </AppText>
-              <AppText muted numberOfLines={1} style={{ fontSize: 14 }}>
-                {row?.fullName || t('common.unnamedPerson')}
-              </AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexShrink: 1 }}>
+              {row ? <ProfileAvatar userId={row.managerId} name={row.fullName} size={48} /> : null}
+              <View style={{ flexShrink: 1, gap: 2 }}>
+                <AppText variant="display" style={{ fontSize: 20 }} numberOfLines={1}>
+                  {t('owner.managers.detail.title')}
+                </AppText>
+                <AppText muted numberOfLines={1} style={{ fontSize: 14 }}>
+                  {row?.fullName || t('common.unnamedPerson')}
+                </AppText>
+              </View>
             </View>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} style={{ width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' }}>
               <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2.2} />
@@ -376,7 +379,7 @@ function ManagerDetailModal({ row, onClose, onMessage }: { row: OwnerManagerRow 
                           <View
                             key={c.id}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.md, backgroundColor: theme.glass, borderWidth: 1, borderColor: theme.glassBorder, padding: spacing.sm }}>
-                            <Avatar uri={null} name={c.fullName} size={30} tint={avatarTint(theme, c.fullName ?? '?')} />
+                            <ProfileAvatar userId={c.id} name={c.fullName} size={30} tint={avatarTint(theme, c.fullName ?? '?')} />
                             <AppText style={{ fontSize: 13.5, fontWeight: '600' }}>{c.fullName || t('common.unnamedPerson')}</AppText>
                           </View>
                         ))}
@@ -441,7 +444,7 @@ function ManagerCard({ row, unread, onOpenDetail, onMessage }: { row: OwnerManag
           tap area and the "Messaggio" button are siblings here, not nested, to avoid that DOM
           violation (it threw a real dev error, not just a style nit). */}
       <Pressable onPress={onOpenDetail} accessibilityRole="button" style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md, opacity: pressed ? 0.85 : 1 })}>
-        <Avatar uri={null} name={row.fullName} size={44} tint={avatarTint(theme, row.fullName ?? row.email)} />
+        <ProfileAvatar userId={row.managerId} name={row.fullName} size={44} tint={avatarTint(theme, row.fullName ?? row.email)} />
         <View style={{ flex: 1, gap: 3 }}>
           <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 16 }}>
             {row.fullName || t('common.unnamedPerson')}
@@ -509,7 +512,7 @@ export function OwnerManagersScreen() {
   const [page, setPage] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<OwnerManagerRow | null>(null);
-  const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
+  const [chat, setChat] = useState<{ id: string; title: string; avatar?: { userId?: string | null; uri?: string | null } } | null>(null);
   const [chatError, setChatError] = useState(false);
   usePageHeader(UsersIcon, t('owner.managers.title'));
   const isSidebar = useSidebarMode();
@@ -521,7 +524,7 @@ export function OwnerManagersScreen() {
     try {
       const id = await openConversation(row.managerId);
       setDetailRow(null);
-      setChat({ id, title: row.fullName || t('common.unnamedPerson') });
+      setChat({ id, title: row.fullName || t('common.unnamedPerson'), avatar: { userId: row.managerId } });
     } catch {
       setChatError(true);
     }
@@ -581,7 +584,7 @@ export function OwnerManagersScreen() {
 
       <AddManagerModal visible={addOpen} onClose={() => setAddOpen(false)} onCreated={() => managers.reload()} />
       <ManagerDetailModal row={detailRow} onClose={() => setDetailRow(null)} onMessage={() => detailRow && void openChat(detailRow)} />
-      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} onClose={() => setChat(null)} onChanged={conversations.reload} />
+      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} avatar={chat?.avatar} onClose={() => setChat(null)} onChanged={conversations.reload} />
     </Screen>
   );
 }

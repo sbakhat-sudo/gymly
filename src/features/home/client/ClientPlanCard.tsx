@@ -1,7 +1,7 @@
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { CreditCardIcon } from '@/components/icons';
+import { ChevronRightIcon, CreditCardIcon } from '@/components/icons';
 import type { MySubscriptionState } from '@/features/billing/billing-api';
 import { TIER_BADGE_COLOR, TIER_LABEL_KEY } from '@/features/billing/plan-tier';
 import { avatarTint } from '@/lib/avatar-tint';
@@ -21,7 +21,7 @@ function dayStart(dateStr: string): number {
  * description, how many days are left and how much of the period has gone. A plan with no colour of its own
  * (an old one) gets the same stable tint the Manager's list gives it. Hides itself without a subscription.
  */
-export function ClientPlanCard({ state }: { state: MySubscriptionState | undefined }) {
+export function ClientPlanCard({ state, onPress }: { state: MySubscriptionState | undefined; onPress?: () => void }) {
   const { t, lang } = useI18n();
   const theme = useTheme();
   const now = useNow(60 * 60_000);
@@ -40,7 +40,12 @@ export function ClientPlanCard({ state }: { state: MySubscriptionState | undefin
   const expiryLabel = new Date(`${sub.expiryDate}T12:00:00`).toLocaleDateString(lang === 'it' ? 'it-IT' : 'en-GB', { day: 'numeric', month: 'long' });
 
   return (
-    <View style={[{ borderRadius: radius.xl, overflow: 'hidden', backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }, CARD_SHADOW]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? `${sub.planName}. ${t('home.client.plan.change')}` : undefined}
+      style={({ pressed }) => [{ borderRadius: radius.xl, overflow: 'hidden', backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, opacity: pressed && onPress ? 0.92 : 1 }, CARD_SHADOW]}>
       <View style={{ height: 6, backgroundColor: tint }} />
       <View style={{ padding: spacing.lg, gap: spacing.md, backgroundColor: `${tint}10` }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -87,7 +92,14 @@ export function ClientPlanCard({ state }: { state: MySubscriptionState | undefin
             {sub.planDescription}
           </AppText>
         ) : null}
+
+        {onPress ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: theme.border }}>
+            <AppText style={{ color: tint, fontWeight: '800', fontSize: 14 }}>{t('home.client.plan.change')}</AppText>
+            <ChevronRightIcon color={tint} size={18} />
+          </View>
+        ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }

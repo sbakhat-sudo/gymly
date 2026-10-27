@@ -60,3 +60,9 @@ export async function syncGeofences(): Promise<void> {
     logger.error('geofence.sync_failed', e);
   }
 }
+
+/** Stops watching the gym's area (on sign-out), so nothing keeps firing for the account that just left. */
+export async function stopGeofencing(): Promise<void> {
+  if (Platform.OS === 'web' || isExpoGo) return;
+  await Location.stopGeofencingAsync(GYM_GEOFENCE_TASK).catch(() => undefined);
+}

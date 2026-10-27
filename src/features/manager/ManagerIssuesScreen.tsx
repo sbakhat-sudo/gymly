@@ -17,6 +17,7 @@ import { useI18n, type Lang, type TranslationKey } from '@/lib/i18n';
 import { isOnDateKey, useSelectedDate } from '@/lib/selected-date-context';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
+import { downloadXlsx } from '@/lib/xlsx';
 
 import { ManagerNotifications } from './ManagerNotifications';
 import { getIssues, reopenIssue, resolveIssue, setIssueSeverity, type IssueSeverity, type IssueStatus, type ManagerIssueEntry } from './manager-api';
@@ -37,10 +38,6 @@ const PAGE_SIZE = 6;
 /** Column widths as flex ratios — kept as one table, shared by the header row and every body row, so
  * they can never drift out of alignment with each other. */
 const COL = { date: 0.9, client: 1.9, issue: 2.3, severity: 1, status: 1.15, actions: 0.8 };
-
-function escapeCsvCell(cell: string): string {
-  return `"${cell.replace(/"/g, '""')}"`;
-}
 
 /**
  * No reply field anywhere on this screen, by design (spec: "senza campo di risposta testuale") —
@@ -128,14 +125,7 @@ export function ManagerIssuesScreen() {
       i.severity ? t(SEVERITY_LABEL_KEY[i.severity]) : '',
       t(STATUS_LABEL_KEY[i.status]),
     ]);
-    const csv = '﻿' + [header, ...rows].map((row) => row.map(escapeCsvCell).join(',')).join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${t('manager.issues.title').toLowerCase()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadXlsx(t('manager.issues.title').toLowerCase(), t('manager.issues.title'), header, rows);
   }
 
   return (
@@ -407,7 +397,7 @@ function IssueTableRow({
         </Pressable>
       </View>
 
-      <ActionSheet visible={menuOpen} title={clientLabel} subtitle={issue.description ?? undefined} actions={actions} onClose={() => setMenuOpen(false)} />
+      <ActionSheet visible={menuOpen} title={clientLabel} avatar={{ uri: issue.clientAvatarUrl, name: clientLabel }} subtitle={issue.description ?? undefined} actions={actions} onClose={() => setMenuOpen(false)} />
     </View>
   );
 }

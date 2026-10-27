@@ -74,7 +74,8 @@ export function AdminNotifications() {
         icon: InboxIcon,
         tint: theme.primary,
         title: t('admin.notifications.item.pending'),
-        description: o.fullName ?? undefined,
+        description: [o.gymName ?? o.fullName, o.email].filter(Boolean).join(' · ') || undefined,
+        avatar: { userId: o.userId, name: o.gymName ?? o.fullName },
         createdAt: o.createdAt,
         read: false,
         onPress: () => goTo('/(admin)/manager'),
@@ -89,7 +90,7 @@ export function AdminNotifications() {
         tint: lastDay ? theme.danger : theme.band.amber.solid,
         title: t(lastDay ? 'admin.notifications.item.lastDay' : 'admin.notifications.item.unpaid'),
         description: t('admin.notifications.item.unpaidDesc', {
-          owner: o.fullName || o.email,
+          owner: o.chainName || o.fullName || o.email,
           date: graceEnd ? graceEnd.toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' }) : '—',
         }),
         // When the plan fell due, i.e. when this notification "arrived".

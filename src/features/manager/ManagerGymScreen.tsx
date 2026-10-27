@@ -13,14 +13,17 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { Toggle } from '@/components/Toggle';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useI18n } from '@/lib/i18n';
+import { geocodeAddress } from '@/lib/supabase/address-suggest';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { EndTimeOfDaySchema, TimeOfDaySchema, type OpeningHours, type Weekday } from '@/schemas';
 
+import { GymOpenStateNote } from './GymOpenStateNote';
 import { ManagerNotifications } from './ManagerNotifications';
 import { ManagerPositionCard } from './ManagerPositionCard';
 import {
   getChainSites,
   getPresentPeople,
+  getSiteAddress,
   getSiteGeofence,
   getSiteStatus,
   getSupportEmail,
@@ -163,6 +166,9 @@ export function ManagerGymScreen() {
   // as "unknown" rather than fabricating a precision figure for coordinates that were typed by hand
   // or loaded from a previous save.
   const [accuracyM, setAccuracyM] = useState<number | null>(null);
+  // The address the Owner typed when adding this Manager; while the gym has no coordinates yet it pre-fills the
+  // position card, and its position is looked up so Latitudine/Longitudine are not left empty.
+  const [siteAddress, setSiteAddress] = useState<string | null>(null);
   const [gpsAvailable, setGpsAvailable] = useState<boolean | null>(null);
   const [clientsPresent, setClientsPresent] = useState<number | null>(null);
 
@@ -228,11 +234,21 @@ export function ManagerGymScreen() {
       },
       () => alive && setLoadError(true)
     );
-    getSiteGeofence(siteId).then((g) => {
-      if (!alive || !g) return;
-      setLat(String(g.lat));
-      setLng(String(g.lng));
-      setRadiusM(String(g.radius));
+    getSiteGeofence(siteId).then(async (g) => {
+      if (!alive) return;
+      if (g) {
+        setLat(String(g.lat));
+        setLng(String(g.lng));
+        setRadiusM(String(g.radius));
+        return;
+      }
+      const address = await getSiteAddress(siteId);
+      if (!alive || !address) return;
+      setSiteAddress(address);
+      const found = await geocodeAddress(address);
+      if (!alive || !found) return;
+      setLat(found.lat.toFixed(6));
+      setLng(found.lng.toFixed(6));
     }).catch(() => undefined);
     return () => {
       alive = false;
@@ -424,10 +440,7 @@ export function ManagerGymScreen() {
             </View>
           </View>
         </View>
-        <AppText variant="caption" muted>
-          {t('manager.gym.toggle.help')}
-        </AppText>
-        <Banner message={t('manager.gym.toggle.info')} />
+        <GymOpenStateNote status={status} />
       </Card>
 
       <Card>
@@ -507,6 +520,8 @@ export function ManagerGymScreen() {
       </Card>
 
       <ManagerPositionCard
+        key={siteAddress ?? 'no-address'}
+        initialAddress={siteAddress}
         lat={lat}
         onLatChange={setLat}
         lng={lng}

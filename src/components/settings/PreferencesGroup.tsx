@@ -4,8 +4,8 @@ import { useI18n, type Lang } from '@/lib/i18n';
 import { LightbulbIcon, MessageCircleIcon } from '../icons';
 import { SettingsChoiceRow, SettingsGroup } from './SettingsKit';
 
-/** "Preferenze": the language every role can pick, and (where it applies) light / dark / automatic. */
-export function PreferencesGroup({ withTheme = false }: { withTheme?: boolean }) {
+/** "Preferenze": the language and light / dark / automatic, for every role (`withTheme={false}` hides the theme row). */
+export function PreferencesGroup({ withTheme = true }: { withTheme?: boolean }) {
   const { t, lang } = useI18n();
   const { setLang, themePref, setThemePref } = useAppState();
 

@@ -89,6 +89,7 @@ export function CoachNotifications({ hideInSidebarMode = true }: { hideInSidebar
       tint: theme.band.amber.solid,
       title: t('coach.notifications.item', { client: r.clientName }),
       description: r.comment ?? undefined,
+      avatar: { uri: r.clientAvatarUrl, name: r.clientName },
       createdAt: r.createdAt,
       read: seenIds.includes(id),
       // Marks it seen and jumps the shared date picker to this rating's own day first — otherwise

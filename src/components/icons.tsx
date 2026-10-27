@@ -34,6 +34,12 @@ export const HomeIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const MoonIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <Path d="M20.5 13.2A8.5 8.5 0 1 1 10.8 3.5a6.8 6.8 0 0 0 9.7 9.7Z" />
+  </Icon>
+);
+
 export const ClockIcon = (p: IconProps) => (
   <Icon {...p}>
     <Circle cx={12} cy={12} r={9} />

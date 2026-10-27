@@ -53,7 +53,7 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [issues, setIssues] = useState<ManagerIssueEntry[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
-  const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
+  const [chat, setChat] = useState<{ id: string; title: string; avatar?: { userId?: string | null; uri?: string | null } } | null>(null);
   const [seenIds, setSeenIds] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -72,7 +72,7 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
   // Tapping a notification marks it seen and jumps the shared date picker to that item's own day
   // first — otherwise an older request/issue could navigate to a list still filtered to today and
   // show empty.
-  function goTo(href: '/(manager)/richieste' | '/(manager)/issues', id: string, itemCreatedAt: string): void {
+  function goTo(href: '/(manager)/persone' | '/(manager)/issues', id: string, itemCreatedAt: string): void {
     markSeen([id]);
     setDateKey(formatDateKey(new Date(itemCreatedAt)));
     router.push(href);
@@ -119,9 +119,10 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
         tint: theme.primary,
         title: t('manager.notifications.item.request'),
         description: r.fullName ?? undefined,
+        avatar: { userId: r.userId, name: r.fullName },
         createdAt: r.createdAt,
         read: seenIds.includes(id),
-        onPress: () => goTo('/(manager)/richieste', id, r.createdAt),
+        onPress: () => goTo('/(manager)/persone', id, r.createdAt),
       };
     }),
     ...issues.map((i): NotificationListItem => {
@@ -132,6 +133,7 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
         tint: i.severity === 'urgent' ? theme.danger : theme.band.amber.solid,
         title: t('manager.notifications.item.issue', { client: i.clientName }),
         description: i.description ?? undefined,
+        avatar: { uri: i.clientAvatarUrl, name: i.clientName },
         createdAt: i.createdAt,
         read: seenIds.includes(id),
         onPress: () => goTo('/(manager)/issues', id, i.createdAt),
@@ -146,11 +148,12 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
         tint: theme.primary,
         title: t('manager.notifications.item.message', { name: c.otherName || t('common.unnamedPerson') }),
         description: c.lastBody ?? undefined,
+        avatar: { userId: c.otherId, uri: c.otherAvatarUrl, name: c.otherName },
         createdAt: c.lastAt,
         read: c.unreadCount === 0,
         onPress: () => {
           setOpen(false);
-          setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson') });
+          setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson'), avatar: { userId: c.otherId, uri: c.otherAvatarUrl } });
         },
       })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -171,7 +174,7 @@ export function ManagerNotifications({ hideInSidebarMode = true }: { hideInSideb
 
       <NotificationsSheet visible={open} onClose={() => setOpen(false)} items={items} onMarkAllRead={markAllRead} emptyLabel={t('manager.notifications.empty')} />
 
-      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} onClose={() => setChat(null)} onChanged={refreshConversations} />
+      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} avatar={chat?.avatar} onClose={() => setChat(null)} onChanged={refreshConversations} />
     </>
   );
 }

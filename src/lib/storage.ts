@@ -64,7 +64,7 @@ export const STORAGE_SCHEMAS = {
   pendingManagerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string() }),
   /** Same role as `pendingManagerPlan`, for the Owner's own signup (`OwnerSignupScreen.tsx`) —
    * Manager no longer self-registers at all, this is its replacement. */
-  pendingOwnerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string(), phone: z.string() }),
+  pendingOwnerPlan: z.object({ plan: z.enum(['trial', 'pro', 'business']), fullName: z.string(), phone: z.string(), gymName: z.string().optional() }),
   /** The last geofence "you're near the gym" notification `geofenceTask.ts` actually sent —
    * debounces it to at most once an hour. One fixed key, not one per site, is enough: a client
    * belongs to exactly one gym (see `useSyncGeofences.ts`'s own comment on the same constraint). */

@@ -58,6 +58,18 @@ if (Platform.OS !== 'web' && !isExpoGo) {
     // Lazily imported: `@/lib/supabase/client` pulls in `@supabase/supabase-js`, no reason to load it
     // for every app boot just because this module is imported at the top of `_layout.tsx`.
     const { supabase } = await import('@/lib/supabase/client');
+
+    // Nothing to announce when check-in is not possible right now: the gym is closed (the database refuses it), or
+    // the member is already checked in.
+    const { data: open } = await supabase.rpc('site_is_open', { p_site_id: siteId });
+    if (open === false) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: openCheckin } = await supabase.from('checkins').select('id').eq('user_id', user.id).eq('site_id', siteId).is('checkout_at', null).limit(1).maybeSingle();
+      if (openCheckin) return;
+    }
     const { data: site } = await supabase.from('sites').select('name').eq('site_id', siteId).maybeSingle();
     const lang = (await storage.get('lang')) ?? 'it';
 
@@ -65,7 +77,7 @@ if (Platform.OS !== 'web' && !isExpoGo) {
       content: {
         title: translate(lang, 'checkin.notification.proximity.title'),
         body: translate(lang, 'checkin.notification.proximity.body', { name: site?.name ?? '' }),
-        data: { url: '/(client)/checkin', siteId },
+        data: { url: '/(client)/checkin', siteId, userId: user?.id, userEmail: user?.email ?? null },
       },
       trigger: null,
     });

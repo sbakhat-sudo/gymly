@@ -365,9 +365,13 @@ export interface Database {
         Args: Record<string, never>;
         Returns: { id: string; full_name: string | null }[];
       };
+      coach_get_my_ratings_with_photo: {
+        Args: Record<string, never>;
+        Returns: { id: number; created_at: string; client_name: string; rating: number; comment: string | null; coach_reply: string | null; manager_note: string | null; client_avatar_url: string | null }[];
+      };
       coach_get_my_ratings: {
         Args: Record<string, never>;
-        Returns: { id: number; created_at: string; client_name: string; rating: number; comment: string | null; coach_reply: string | null; manager_note: string | null }[];
+        Returns: { id: number; created_at: string; client_name: string; rating: number; comment: string | null; coach_reply: string | null; manager_note: string | null; client_avatar_url: string | null }[];
       };
       client_get_my_ratings: {
         Args: Record<string, never>;
@@ -385,6 +389,21 @@ export interface Database {
         Args: { p_rating_id: number; p_note: string };
         Returns: undefined;
       };
+      manager_get_ratings_with_photo: {
+        Args: Record<string, never>;
+        Returns: {
+          id: number;
+          created_at: string;
+          client_name: string;
+          coach_id: string;
+          coach_name: string;
+          rating: number;
+          comment: string | null;
+          coach_reply: string | null;
+          manager_note: string | null;
+          client_avatar_url: string | null;
+        }[];
+      };
       manager_get_ratings: {
         Args: Record<string, never>;
         Returns: {
@@ -397,6 +416,7 @@ export interface Database {
           comment: string | null;
           coach_reply: string | null;
           manager_note: string | null;
+          client_avatar_url: string | null;
         }[];
       };
       manager_get_issues: {
@@ -437,7 +457,7 @@ export interface Database {
         Returns: undefined;
       };
       request_owner_signup: {
-        Args: { p_plan: 'trial' | 'pro' | 'business'; p_full_name: string | null; p_phone?: string | null };
+        Args: { p_plan: 'trial' | 'pro' | 'business'; p_full_name: string | null; p_phone?: string | null; p_gym_name?: string | null };
         Returns: undefined;
       };
       owner_get_chain_name: {
@@ -505,6 +525,17 @@ export interface Database {
           checkins_today: number;
         }[];
       };
+      admin_get_pending_owners: {
+        Args: Record<string, never>;
+        Returns: {
+          user_id: string;
+          gym_name: string | null;
+          full_name: string | null;
+          email: string;
+          requested_plan: 'trial' | 'pro' | 'business' | null;
+          created_at: string;
+        }[];
+      };
       admin_get_owners: {
         Args: Record<string, never>;
         Returns: {
@@ -560,6 +591,18 @@ export interface Database {
       chat_get_my_owner: {
         Args: Record<string, never>;
         Returns: { owner_id: string; owner_name: string | null }[];
+      };
+      chat_get_conversations_with_photo: {
+        Args: Record<string, never>;
+        Returns: {
+          conversation_id: string;
+          other_id: string;
+          other_name: string | null;
+          last_body: string | null;
+          last_at: string;
+          unread_count: number;
+          other_avatar_url: string | null;
+        }[];
       };
       chat_get_conversations: {
         Args: Record<string, never>;
@@ -653,6 +696,10 @@ export interface Database {
       get_site_geofence: {
         Args: { p_site_id: string };
         Returns: { lat: number; lng: number; radius: number; proximity_radius: number }[];
+      };
+      site_is_open: {
+        Args: { p_site_id: string };
+        Returns: boolean;
       };
       manager_set_site_location: {
         Args: { p_site_id: string; p_lat: number; p_lng: number; p_radius: number; p_user_agent?: string | null };

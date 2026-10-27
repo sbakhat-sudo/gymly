@@ -9,6 +9,7 @@ import { fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
 import { AppText } from './AppText';
+import { ProfileAvatar } from './ProfileAvatar';
 import { ROLE_TOP_BAR_HEIGHT } from './RoleTopBar';
 import { Segmented } from './Segmented';
 
@@ -23,6 +24,9 @@ export interface NotificationListItem {
   /** RFC 3339 — formatted with `formatRelativeTime`, same as everywhere else in the app. */
   createdAt: string;
   read: boolean;
+  /** When the item is about a person: their photo (looked up by `userId`, or `uri` when already known) replaces the
+   * icon; the initials show until it is known or when they have none. */
+  avatar?: { userId?: string | null; uri?: string | null; name: string | null };
   onPress?: () => void;
 }
 
@@ -175,9 +179,13 @@ function NotificationRow({ item, lang, onClose }: { item: NotificationListItem; 
       <View {...decorativeA11yProps} style={{ width: 8, alignItems: 'center', paddingTop: 8 }}>
         {!item.read ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: theme.primary }} /> : null}
       </View>
-      <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: `${item.tint}1F` }}>
-        <Icon color={item.tint} size={16} />
-      </View>
+      {item.avatar ? (
+        <ProfileAvatar userId={item.avatar.userId} uri={item.avatar.uri} name={item.avatar.name} size={34} tint={`${item.tint}33`} onTint={item.tint} />
+      ) : (
+        <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: `${item.tint}1F` }}>
+          <Icon color={item.tint} size={16} />
+        </View>
+      )}
       <View style={{ flex: 1, gap: 2 }}>
         <AppText style={{ fontSize: 14, fontWeight: '700', lineHeight: 19 }}>{item.title}</AppText>
         {item.description ? (

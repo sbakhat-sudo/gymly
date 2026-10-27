@@ -41,16 +41,6 @@ export function SubmitFeedbackScreen({ checkinId, autoPrompt = false }: { checki
   const userId = auth.status === 'active' ? auth.session.user.id : null;
   const coaches = useAsync(() => getMySiteCoaches(), []);
 
-  const [remainingSeconds, setRemainingSeconds] = useState(AUTO_PROMPT_SECONDS);
-  useEffect(() => {
-    if (!autoPrompt) return;
-    const interval = setInterval(() => setRemainingSeconds((s) => s - 1), 1000);
-    return () => clearInterval(interval);
-  }, [autoPrompt]);
-  useEffect(() => {
-    if (autoPrompt && remainingSeconds <= 0) router.back();
-  }, [autoPrompt, remainingSeconds, router]);
-
   const [selectedCoach, setSelectedCoach] = useState<SiteCoach | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -60,6 +50,19 @@ export function SubmitFeedbackScreen({ checkinId, autoPrompt = false }: { checki
   const [issueText, setIssueText] = useState('');
   const [issueBusy, setIssueBusy] = useState(false);
   const [issueState, setIssueState] = useState<'idle' | 'sent' | 'error'>('idle');
+
+  // The popup that opens by itself after check-out closes after two minutes if nobody touches it. As soon as the member
+  // starts writing or rating, the countdown stops and the chip disappears: it must never close on someone mid-sentence.
+  const interacted = rating > 0 || selectedCoach !== null || comment.length > 0 || issueText.length > 0;
+  const [remainingSeconds, setRemainingSeconds] = useState(AUTO_PROMPT_SECONDS);
+  useEffect(() => {
+    if (!autoPrompt || interacted) return;
+    const interval = setInterval(() => setRemainingSeconds((s) => s - 1), 1000);
+    return () => clearInterval(interval);
+  }, [autoPrompt, interacted]);
+  useEffect(() => {
+    if (autoPrompt && !interacted && remainingSeconds <= 0) router.back();
+  }, [autoPrompt, interacted, remainingSeconds, router]);
 
   async function sendRating(): Promise<void> {
     if (!selectedCoach || rating === 0 || !userId) return;
@@ -107,7 +110,7 @@ export function SubmitFeedbackScreen({ checkinId, autoPrompt = false }: { checki
             {t('feedback.title')}
           </AppText>
         </View>
-        {autoPrompt ? (
+        {autoPrompt && !interacted ? (
           <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: theme.surfaceAlt }}>
             <AppText variant="caption" muted style={{ fontWeight: '700', fontVariant: ['tabular-nums'] }}>
               {t('feedback.autoPrompt.closesIn', { time: formatCountdown(remainingSeconds) })}

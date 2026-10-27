@@ -33,7 +33,7 @@ export function OwnerNotifications() {
 
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [billing, setBilling] = useState<OwnerPlanBilling | null>(null);
-  const [chat, setChat] = useState<{ id: string; title: string } | null>(null);
+  const [chat, setChat] = useState<{ id: string; title: string; avatar?: { userId?: string | null; uri?: string | null } } | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -75,11 +75,12 @@ export function OwnerNotifications() {
         tint: theme.primary,
         title: t('owner.notifications.item.message', { name: c.otherName || t('common.unnamedPerson') }),
         description: c.lastBody ?? undefined,
+        avatar: { userId: c.otherId, uri: c.otherAvatarUrl, name: c.otherName },
         createdAt: c.lastAt,
         read: c.unreadCount === 0,
         onPress: () => {
           setOpen(false);
-          setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson') });
+          setChat({ id: c.conversationId, title: c.otherName || t('common.unnamedPerson'), avatar: { userId: c.otherId, uri: c.otherAvatarUrl } });
         },
       })),
     ...(planDue && billing?.graceEnd
@@ -111,7 +112,7 @@ export function OwnerNotifications() {
 
       <NotificationsSheet visible={open} onClose={() => setOpen(false)} items={items} emptyLabel={t('owner.notifications.empty')} />
 
-      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} onClose={() => setChat(null)} onChanged={refreshConversations} />
+      <ChatModal key={chat?.id ?? 'none'} conversationId={chat?.id ?? null} title={chat?.title ?? ''} avatar={chat?.avatar} onClose={() => setChat(null)} onChanged={refreshConversations} />
     </>
   );
 }

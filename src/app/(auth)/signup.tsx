@@ -18,7 +18,7 @@ import { MIN_TAP, fontFamily, spacing, useTheme } from '@/lib/theme';
 /** Coach never picks a role from a list, it reaches this screen through its own QR code/link,
  * which carries it as `?role=coach`. Manager no longer self-registers at all (a Manager account is
  * only ever created by an Owner, via "Aggiungi Manager") — the role this screen's public/web entry
- * point now leads to is Owner ("Titolare"): a plan choice first, then an Admin approval wait, then
+ * point now leads to is Owner: a plan choice first, then an Admin approval wait, then
  * creating their own business — see OwnerSignupScreen.
  *
  * Client is phone-only (Expo Go) — there is no "Cliente" option on web at all, self-serve or

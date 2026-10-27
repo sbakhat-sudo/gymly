@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useIsFocused } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -9,6 +10,7 @@ import { Screen } from '@/components/Screen';
 import { getAnnouncements } from '@/features/announcements/announcements-api';
 import { getMySubscription } from '@/features/billing/billing-api';
 import { PaymentDueBanner } from '@/features/billing/PaymentDueBanner';
+import { PlanChoiceModal } from '@/features/billing/PlanChoiceModal';
 import { ClientNotifications } from '@/features/checkin/ClientNotifications';
 import { weekdayOfDateKey, windowsOf } from '@/lib/domain/client-home';
 import { addDays, localTime } from '@/lib/domain/time';
@@ -58,6 +60,7 @@ export function RealClientLiveScreen({ siteId }: { siteId: string }) {
   );
 
   const subscription = useAsync(() => getMySubscription(), [focused], focused);
+  const [switchingPlan, setSwitchingPlan] = useState(false);
   const announcements = useAsync(() => getAnnouncements(), [focused], focused);
 
   if (loadError) {
@@ -106,16 +109,27 @@ export function RealClientLiveScreen({ siteId }: { siteId: string }) {
 
       <AnnouncementsStrip announcements={announcements.data ?? []} />
 
-      {loadingBand ? <ActivityIndicator style={{ marginVertical: spacing.xxl }} /> : <GymBandHero band={band} />}
+      {loadingBand ? <ActivityIndicator style={{ marginVertical: spacing.xxl }} /> : <GymBandHero band={band} site={site} now={now} />}
 
       <PaymentDueBanner />
       <ResolvedIssueBanner />
 
       <View style={{ gap: spacing.lg }}>
         {recentHours ? <RecentHoursCard hours={recentHours} nowBand={band} /> : null}
-        <ClientPlanCard state={subscription.data} />
+        <ClientPlanCard state={subscription.data} onPress={() => setSwitchingPlan(true)} />
         <GymHoursCard site={site} nowMs={now} />
       </View>
+
+      <PlanChoiceModal
+        mode="switch"
+        visible={switchingPlan}
+        currentPlanName={subscription.data?.subscription?.planName ?? null}
+        onClose={() => setSwitchingPlan(false)}
+        onDone={() => {
+          setSwitchingPlan(false);
+          subscription.reload();
+        }}
+      />
 
       <WeeklyGoalPopup />
     </Screen>

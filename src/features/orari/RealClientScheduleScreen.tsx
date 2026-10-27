@@ -5,8 +5,6 @@ import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { getMySubscription } from '@/features/billing/billing-api';
-import { SubscriptionStatusCard } from '@/features/billing/SubscriptionStatusCard';
 import { MonthCalendarCard } from '@/features/home/client/ClientProgressCards';
 import { totalSeconds, visitedDays, weeklyAverage, weeklySummaries } from '@/lib/domain/client-home';
 import { addDays, localTime } from '@/lib/domain/time';
@@ -54,7 +52,6 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
     [siteId, weekStart],
     site.data !== undefined
   );
-  const subscription = useAsync(() => getMySubscription(), [focused], focused);
   const auth = useAuth();
   const userId = 'session' in auth ? auth.session.user.id : null;
   const visits = useAsync(() => (userId ? getMyCheckins(userId, siteId, VISITS_SHOWN) : Promise.resolve([])), [userId, siteId, focused], userId !== null && focused);
@@ -119,8 +116,6 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
             <WeeklyProgressCard weeks={weeks} />
           </>
         )}
-
-        <SubscriptionStatusCard state={subscription.data} />
 
         {visits.error ? (
           <View style={{ gap: spacing.sm }}>

@@ -18,6 +18,7 @@ import { spacing, useTheme } from '@/lib/theme';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
 import { getPresentPeople, getRecentActivity, type ActivityEvent, type PresentPerson } from './manager-api';
+import { FullCapacityCard } from './FullCapacityCard';
 import { ManagerNotifications } from './ManagerNotifications';
 import { PresenceList } from './PresenceList';
 import { ActivityFeed, SituationStatCards } from './SituationStats';
@@ -172,7 +173,7 @@ export function ManagerSituationScreen() {
         </View>
       ) : null}
 
-      {site.notifyOnThreshold && band === 'red' ? <Banner title={t('manager.situation.full.banner')} /> : null}
+      {site.notifyOnThreshold && band === 'red' ? <FullCapacityCard /> : null}
 
       {isWide ? (
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xl }}>
@@ -182,7 +183,7 @@ export function ManagerSituationScreen() {
                 <Orb color={theme.band[band].solid} size={380} />
               </View>
             ) : null}
-            {loadingBand ? <ActivityIndicator style={{ marginVertical: spacing.xxl }} /> : <GymBandHero band={band} />}
+            {loadingBand ? <ActivityIndicator style={{ marginVertical: spacing.xxl }} /> : <GymBandHero band={band} site={site} now={now} />}
           </View>
           <View style={{ flex: 1.1, minWidth: 0, paddingTop: spacing.lg }}>
             {siteId ? <PresenceList siteId={siteId} people={people} error={peopleError} /> : null}
@@ -194,7 +195,7 @@ export function ManagerSituationScreen() {
         </View>
       ) : (
         <>
-          {loadingBand ? <ActivityIndicator style={{ marginVertical: spacing.xxl }} /> : <GymBandHero band={band} />}
+          {loadingBand ? <ActivityIndicator style={{ marginVertical: spacing.xxl }} /> : <GymBandHero band={band} site={site} now={now} />}
           {siteId ? <PresenceList siteId={siteId} people={people} error={peopleError} /> : null}
           <SituationStatCards occupancyPct={occupancyPct} presentCount={presentClientCount} band={occupancyBand} />
           <ActivityFeed events={activity} error={activityError} lang={lang} />

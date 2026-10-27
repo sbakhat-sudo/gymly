@@ -7,6 +7,7 @@ export interface CoachRatingEntry {
   id: number;
   createdAt: string;
   clientName: string;
+  clientAvatarUrl: string | null;
   rating: number;
   comment: string | null;
   coachReply: string | null;
@@ -17,12 +18,13 @@ export interface CoachRatingEntry {
  * Coach has no RLS path to read another coach's rows even if this were called with different args,
  * since there are no args to tamper with. */
 export async function getMyRatings(): Promise<CoachRatingEntry[]> {
-  const { data, error } = await supabase.rpc('coach_get_my_ratings');
+  const { data, error } = await supabase.rpc('coach_get_my_ratings_with_photo');
   if (error) throw error;
   return data.map((r) => ({
     id: r.id,
     createdAt: r.created_at,
     clientName: r.client_name,
+    clientAvatarUrl: r.client_avatar_url,
     rating: r.rating,
     comment: r.comment,
     coachReply: r.coach_reply,

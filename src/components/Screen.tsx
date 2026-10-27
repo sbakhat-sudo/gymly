@@ -64,6 +64,10 @@ export function Screen({ children, onRefresh, refreshing = false, orb, maxWidth,
       }}
       contentInsetAdjustmentBehavior="never"
       keyboardShouldPersistTaps="handled"
+      // On iPhone the page makes room for the keyboard by itself and scrolls the field being typed in into view, so the
+      // keyboard never hides what is being written (Android already resizes the window).
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
       refreshControl={
         onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} /> : undefined
       }>

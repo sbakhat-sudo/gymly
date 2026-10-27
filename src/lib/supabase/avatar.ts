@@ -1,3 +1,4 @@
+import { forgetAvatar } from './avatars';
 import { supabase } from './client';
 
 const AVATAR_BUCKET = 'avatars';
@@ -28,5 +29,6 @@ export async function uploadAvatar(userId: string, uri: string): Promise<string>
   const { error: updateError } = await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', userId);
   if (updateError) throw updateError;
 
+  forgetAvatar(userId);
   return avatarUrl;
 }

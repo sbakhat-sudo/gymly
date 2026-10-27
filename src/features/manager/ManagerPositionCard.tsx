@@ -1,13 +1,15 @@
 import * as Linking from 'expo-linking';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { CrosshairIcon, MapPinIcon, UsersIcon } from '@/components/icons';
 import { RangeSlider } from '@/components/RangeSlider';
 import { CARD_SHADOW } from '@/lib/card-shadow';
+import { parseAddress } from '@/lib/domain/address-parse';
 import { useI18n } from '@/lib/i18n';
+import { suggestPlaces, type AddressPlace } from '@/lib/supabase/address-suggest';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 
 const RADIUS_MIN = 10;
@@ -159,6 +161,8 @@ interface ManagerPositionCardProps {
   onLocateMe: () => void;
   onSave: () => void;
   feedback: 'saved' | 'invalid' | 'error' | 'permissionDenied' | null;
+  /** The address saved for the gym: pre-fills the address search below (the card is keyed on it, so it applies once loaded). */
+  initialAddress?: string | null;
 }
 
 /** "Posizione palestra": the geofence the Manager sets for geolocated check-in, as one card — a
@@ -183,16 +187,50 @@ export function ManagerPositionCard({
   onLocateMe,
   onSave,
   feedback,
+  initialAddress = null,
 }: ManagerPositionCardProps) {
   const { t } = useI18n();
   const theme = useTheme();
   const radiusNum = Number(radiusM) || RADIUS_MIN;
   // Local, ephemeral — only ever used to steer the map preview above live; the coordinates the
   // Manager copies back into the fields below are the real stored values.
-  const [street, setStreet] = useState('');
-  const [streetNumber, setStreetNumber] = useState('');
-  const [city, setCity] = useState('');
+  const [initial] = useState(() => parseAddress(initialAddress));
+  const [street, setStreet] = useState(initial.street);
+  const [streetNumber, setStreetNumber] = useState(initial.number);
+  const [city, setCity] = useState(initial.city);
   const addressQuery = addressLine(street, streetNumber, city);
+
+  // Suggestions for the typed address, asked half a second after typing stops. Picking one fills the street, number and
+  // city AND the coordinates, so the position is the building's own when OpenStreetMap knows it.
+  const [places, setPlaces] = useState<AddressPlace[]>([]);
+  const [picked, setPicked] = useState(false);
+  const [approximate, setApproximate] = useState(false);
+  useEffect(() => {
+    if (picked || !addressQuery || addressQuery.length < 4) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      void suggestPlaces(addressQuery).then((found) => {
+        if (alive) setPlaces(found);
+      });
+    }, 500);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [addressQuery, picked]);
+  const showPlaces = !picked && addressQuery !== null && addressQuery.length >= 4 && places.length > 0;
+
+  function pickPlace(p: AddressPlace): void {
+    const parts = parseAddress(p.label);
+    setStreet(parts.street);
+    setStreetNumber(parts.number);
+    setCity(parts.city);
+    onLatChange(p.lat.toFixed(6));
+    onLngChange(p.lng.toFixed(6));
+    setApproximate(!p.exact);
+    setPicked(true);
+    setPlaces([]);
+  }
 
   const fieldStyle = {
     flex: 1,
@@ -231,7 +269,10 @@ export function ManagerPositionCard({
               <View style={[fieldStyle, { flex: 3 }]}>
                 <TextInput
                   value={street}
-                  onChangeText={setStreet}
+                  onChangeText={(v) => {
+                    setStreet(v);
+                    setPicked(false);
+                  }}
                   placeholder={t('manager.gym.location.addressSearch.streetPlaceholder')}
                   accessibilityLabel={t('manager.gym.location.addressSearch.street')}
                   placeholderTextColor={theme.textMuted}
@@ -241,7 +282,10 @@ export function ManagerPositionCard({
               <View style={[fieldStyle, { flex: 1 }]}>
                 <TextInput
                   value={streetNumber}
-                  onChangeText={setStreetNumber}
+                  onChangeText={(v) => {
+                    setStreetNumber(v);
+                    setPicked(false);
+                  }}
                   placeholder={t('manager.gym.location.addressSearch.numberPlaceholder')}
                   accessibilityLabel={t('manager.gym.location.addressSearch.number')}
                   placeholderTextColor={theme.textMuted}
@@ -252,13 +296,41 @@ export function ManagerPositionCard({
             <View style={fieldStyle}>
               <TextInput
                 value={city}
-                onChangeText={setCity}
+                onChangeText={(v) => {
+                  setCity(v);
+                  setPicked(false);
+                }}
                 placeholder={t('manager.gym.location.addressSearch.cityPlaceholder')}
                 accessibilityLabel={t('manager.gym.location.addressSearch.city')}
                 placeholderTextColor={theme.textMuted}
                 style={{ flex: 1, color: theme.text, fontSize: 14 }}
               />
             </View>
+            {showPlaces ? (
+              <View style={{ maxHeight: 220, borderWidth: 1, borderColor: theme.border, borderRadius: radius.md, overflow: 'hidden', backgroundColor: theme.surface }}>
+                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  {places.map((p, i) => (
+                    <Pressable
+                      key={p.label}
+                      accessibilityRole="button"
+                      accessibilityLabel={p.label}
+                      onPress={() => pickPlace(p)}
+                      style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: MIN_TAP, paddingHorizontal: spacing.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.border }, pressed ? { backgroundColor: theme.surfaceAlt } : null]}>
+                      <MapPinIcon color={theme.textMuted} size={18} />
+                      <AppText style={{ flex: 1, fontSize: 14 }}>{p.label}</AppText>
+                      <AppText variant="caption" muted>
+                        {t(p.exact ? 'manager.gym.location.addressSearch.tagExact' : 'manager.gym.location.addressSearch.tagStreet')}
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+            {picked && approximate ? (
+              <AppText variant="caption" color={theme.band.amber.solid} style={{ fontWeight: '600' }}>
+                {t('manager.gym.location.addressSearch.approx')}
+              </AppText>
+            ) : null}
             <AppText variant="caption" muted style={{ fontSize: 11.5, lineHeight: 15 }}>
               {t('manager.gym.location.addressSearch.help')}
             </AppText>

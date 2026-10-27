@@ -93,6 +93,7 @@ export default function CompleteProfileScreen() {
           p_plan: pendingOwnerPlan.plan,
           p_full_name: pendingOwnerPlan.fullName || null,
           p_phone: pendingOwnerPlan.phone || null,
+          p_gym_name: pendingOwnerPlan.gymName || null,
         });
         if (!alive) return;
         if (error) {

@@ -10,7 +10,7 @@ import { SelectedDateProvider } from '@/lib/selected-date-context';
 import { SidebarInsetProvider } from '@/lib/sidebar-inset-context';
 import { SIDEBAR_WIDTH, useSidebarMode } from '@/lib/use-sidebar-mode';
 
-/** Owner ("Titolare") — same shell as Admin (`(admin)/_layout.tsx`): Tabs + PillTabBar, RoleTopBar
+/** Owner — same shell as Admin (`(admin)/_layout.tsx`): Tabs + PillTabBar, RoleTopBar
  * only in sidebar mode. No "palestre" tab like Admin's — the Managers tab already covers it here,
  * since an Owner's sites are always exactly its own Managers' sites. The per-manager detail view
  * (clients/coaches/map) is an in-screen sheet inside OwnerManagersScreen, not a separate route —

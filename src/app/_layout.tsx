@@ -8,20 +8,21 @@ import * as Notifications from 'expo-notifications';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DemoBanner } from '@/components/DemoBanner';
 import { getMySubscription } from '@/features/billing/billing-api';
 import { PlanChoiceModal } from '@/features/billing/PlanChoiceModal';
-import { syncGeofences } from '@/hooks/useSyncGeofences';
+import { stopGeofencing, syncGeofences } from '@/hooks/useSyncGeofences';
 import { DEFAULT_BOOT_STATE, loadBootState, useAppState, type BootState } from '@/lib/app-state';
 import { AppProviders } from '@/lib/app-providers';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useI18n } from '@/lib/i18n';
 import { logger } from '@/lib/logger';
 import { CompleteProfileGate } from '@/features/profile/CompleteProfileGate';
-import { cancelPaymentWarning, schedulePaymentWarning } from '@/lib/notifications';
+import { cancelPaymentWarning, clearNotificationsOfUser, schedulePaymentWarning } from '@/lib/notifications';
 import { PermissionsProvider, usePermissionsState } from '@/lib/permissions-context';
 import { createServices } from '@/lib/services';
 import { useTheme } from '@/lib/theme';
@@ -130,7 +131,7 @@ function NavigatorStack({
 }) {
   const theme = useTheme();
   const router = useRouter();
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   const { guest, demo } = useAppState();
   const { allGranted, recheck } = usePermissionsState();
   // Manager/Coach/Admin/Owner are all staff dashboards meant for a browser, never the phone app.
@@ -222,12 +223,45 @@ function NavigatorStack({
   // instead of an uncaught synchronous throw, so `.catch()` here can never miss it) — plus a live
   // listener for a tap that arrives while the app is already open, same
   // `addNotificationResponseReceivedListener` pattern `notifications.ts#addCheckinResponseListener` uses.
+  // Who is signed in right now, for the notification taps below. A reminder carries the account it was made for: if
+  // that is not the account signed in now, tapping it asks whether to switch to that account (sign out and sign in
+  // again with its email) instead of opening the wrong account's screens.
+  const [switchPrompt, setSwitchPrompt] = useState<{ email: string | null } | null>(null);
+  const signedInUserId = 'session' in auth ? auth.session.user.id : null;
+  const signedInUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    signedInUserIdRef.current = signedInUserId;
+  }, [signedInUserId]);
+  const authReady = auth.status !== 'loading';
+
+  // Signing out clears the reminders of the account that left (and only those: another account still checked in on this
+  // phone keeps its own) and stops watching the gym's area.
+  const lastUserIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (Platform.OS === 'web') return;
+    if (signedInUserId) {
+      lastUserIdRef.current = signedInUserId;
+      return;
+    }
+    if (auth.status !== 'signedOut' || !lastUserIdRef.current) return;
+    void clearNotificationsOfUser(lastUserIdRef.current);
+    void stopGeofencing();
+    lastUserIdRef.current = null;
+  }, [auth.status, signedInUserId]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !authReady) return;
     let alive = true;
 
     function openFromResponse(response: Notifications.NotificationResponse | null | undefined): void {
-      const url = response?.notification?.request?.content?.data?.url;
+      const data = response?.notification?.request?.content?.data;
+      const owner = data?.userId;
+      if (typeof owner === 'string' && owner !== signedInUserIdRef.current) {
+        const email = data?.userEmail;
+        setSwitchPrompt({ email: typeof email === 'string' ? email : null });
+        return;
+      }
+      const url = data?.url;
       if (typeof url === 'string') router.push(url as Href);
     }
 
@@ -242,7 +276,7 @@ function NavigatorStack({
       alive = false;
       sub.remove();
     };
-  }, [router]);
+  }, [router, authReady]);
 
   return (
     <ThemeProvider value={navigationTheme}>
@@ -300,7 +334,20 @@ function NavigatorStack({
         <Stack.Screen name="feedback/[checkinId]" options={{ presentation: 'modal' }} />
       </Stack>
       {/* Mandatory first-login profile for Owner/Manager/Coach — a popup over whatever they land on. */}
-      <CompleteProfileGate />
+      <CompleteProfileGate hold={realClientNative && ((subscription.data === undefined && subscription.error === null) || subscription.data?.needsPlanChoice === true)} />
+      <ConfirmDialog
+        visible={switchPrompt !== null}
+        title={t('notification.otherAccount.title')}
+        message={switchPrompt?.email ? t('notification.otherAccount.body', { email: switchPrompt.email }) : t('notification.otherAccount.bodyNoEmail')}
+        confirmLabel={t('notification.otherAccount.confirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => {
+          const email = switchPrompt?.email;
+          setSwitchPrompt(null);
+          void auth.signOut().then(() => router.replace((email ? { pathname: '/(auth)/login', params: { email } } : '/(auth)/login') as Href));
+        }}
+        onCancel={() => setSwitchPrompt(null)}
+      />
       {demo ? <DemoBanner /> : null}
     </ThemeProvider>
   );

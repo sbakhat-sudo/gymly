@@ -163,6 +163,9 @@ export async function setManagerStatus(userId: string, status: 'active' | 'rejec
 export interface PendingManager {
   userId: string;
   fullName: string | null;
+  /** The gym a new Owner asked for at sign-up (their own name stays in `fullName`). */
+  gymName?: string | null;
+  email?: string | null;
   requestedPlan: SitePlan | null;
   createdAt: string;
 }
@@ -191,14 +194,9 @@ export async function setOwnerStatus(userId: string, status: 'active' | 'rejecte
 /** New Owner signups: a plan was picked, waiting for this approval — which also creates their
  * `gym_chains` row (`admin_set_profile_status()`). Owner's equivalent of the old `getPendingManagers()`. */
 export async function getPendingOwners(): Promise<PendingManager[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, requested_plan, created_at')
-    .eq('role', 'owner')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true });
+  const { data, error } = await supabase.rpc('admin_get_pending_owners');
   if (error) throw error;
-  return data.map((m) => ({ userId: m.id, fullName: m.full_name, requestedPlan: m.requested_plan, createdAt: m.created_at }));
+  return data.map((m) => ({ userId: m.user_id, fullName: m.full_name, gymName: m.gym_name, email: m.email, requestedPlan: m.requested_plan, createdAt: m.created_at }));
 }
 
 /** `active` = plan paid, `grace` = unpaid with the automatic 3-day window running, `deactivated` = the

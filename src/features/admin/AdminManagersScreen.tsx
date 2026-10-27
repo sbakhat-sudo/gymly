@@ -7,6 +7,7 @@ import { Banner } from '@/components/Banner';
 import { GroupHeader } from '@/components/GroupHeader';
 import { ChevronRightIcon, ClockIcon, UsersIcon } from '@/components/icons';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Screen } from '@/components/Screen';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
@@ -73,7 +74,7 @@ export function AdminManagersScreen() {
             setSheetManager(null);
             setPendingConfirm({
               title: t('admin.managers.rejectManager.confirm.title'),
-              message: t('admin.managers.rejectManager.confirm.body', { manager: sheetManager.fullName ?? t('common.unnamedPerson') }),
+              message: t('admin.managers.rejectManager.confirm.body', { manager: (sheetManager.gymName ?? sheetManager.fullName) ?? t('common.unnamedPerson') }),
               confirmLabel: t('admin.managers.reject'),
               onConfirm: () => void decideManager(sheetManager, 'rejected'),
             });
@@ -124,7 +125,8 @@ export function AdminManagersScreen() {
 
       <ActionSheet
         visible={sheetManager !== null}
-        title={sheetManager?.fullName ?? t('common.unnamedPerson')}
+        title={(sheetManager?.gymName ?? sheetManager?.fullName) ?? t('common.unnamedPerson')}
+        avatar={sheetManager ? { userId: sheetManager.userId, name: sheetManager.gymName ?? sheetManager.fullName } : undefined}
         subtitle={sheetManager?.requestedPlan ? t(PLAN_LABEL_KEY[sheetManager.requestedPlan]) : undefined}
         actions={managerSheetActions}
         onClose={() => setSheetManager(null)}
@@ -153,7 +155,7 @@ function ManagerRow({ manager, showDivider, onPress }: { manager: PendingManager
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={manager.fullName ?? t('common.unnamedPerson')}
+      accessibilityLabel={(manager.gymName ?? manager.fullName) ?? t('common.unnamedPerson')}
       style={({ pressed }) => [
         {
           flexDirection: 'row',
@@ -166,11 +168,13 @@ function ManagerRow({ manager, showDivider, onPress }: { manager: PendingManager
         },
         pressed ? { backgroundColor: theme.surfaceAlt } : null,
       ]}>
+      <ProfileAvatar userId={manager.userId} name={manager.gymName ?? manager.fullName} size={44} />
       <View style={{ flex: 1, gap: 1 }}>
         <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 15 }}>
-          {manager.fullName ?? t('common.unnamedPerson')}
+          {(manager.gymName ?? manager.fullName) ?? t('common.unnamedPerson')}
         </AppText>
         <AppText numberOfLines={1} variant="caption" muted>
+          {manager.email ? `${manager.email} · ` : ''}
           {manager.requestedPlan ? t(PLAN_LABEL_KEY[manager.requestedPlan]) : t('admin.managers.noPlan')}
         </AppText>
         <AppText variant="caption" muted style={{ fontSize: 11 }}>

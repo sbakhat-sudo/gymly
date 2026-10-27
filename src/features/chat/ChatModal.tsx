@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Banner } from '@/components/Banner';
 import { XIcon } from '@/components/icons';
 import { useAuth } from '@/lib/auth/auth-context';
@@ -24,11 +25,14 @@ const POLL_MS = 5_000;
 export function ChatModal({
   conversationId,
   title,
+  avatar,
   onClose,
   onChanged,
 }: {
   conversationId: string | null;
   title: string;
+  /** The other person's photo, shown beside the name. */
+  avatar?: { userId?: string | null; uri?: string | null };
   onClose: () => void;
   /** Called after messages were read or sent, so a caller showing an unread badge can refresh it. */
   onChanged?: () => void;
@@ -103,9 +107,12 @@ export function ChatModal({
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg }}>
         <View style={{ width: '100%', maxWidth: 560, height: '80%', maxHeight: 720, borderRadius: radius.card, backgroundColor: theme.background, padding: spacing.lg, gap: spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }}>
-            <AppText variant="display" numberOfLines={1} style={{ fontSize: 20, flexShrink: 1 }}>
-              {title}
-            </AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexShrink: 1 }}>
+              {avatar ? <ProfileAvatar userId={avatar.userId} uri={avatar.uri} name={title} size={40} /> : null}
+              <AppText variant="display" numberOfLines={1} style={{ fontSize: 20, flexShrink: 1 }}>
+                {title}
+              </AppText>
+            </View>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} style={{ width: MIN_TAP, height: MIN_TAP, alignItems: 'center', justifyContent: 'center' }}>
               <XIcon color={theme.text} size={20} />
             </Pressable>

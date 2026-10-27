@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Avatar } from '@/components/Avatar';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { Banner } from '@/components/Banner';
 import { EmptyState } from '@/components/EmptyState';
 import { PulseIcon } from '@/components/icons';
@@ -14,6 +14,8 @@ import { useAsync } from '@/lib/use-async';
 import { getActivityFeed, type ActivityEvent, type ActivityRole } from './activity-api';
 
 const PAGE = 20;
+/** The list scrolls inside the card instead of stretching the whole page; the filters stay put above it. */
+const LIST_MAX_HEIGHT = 420;
 
 const EVENT_KEY: Record<string, TranslationKey> = {
   checkin: 'activity.event.checkin',
@@ -151,7 +153,8 @@ export function ActivityCard({ roles }: { roles: ActivityRole[] }) {
         {first.data === undefined && first.loading ? <ActivityIndicator /> : null}
         {first.data && items.length === 0 ? <EmptyState message={t('activity.empty')} icon={PulseIcon} /> : null}
 
-        {items.length > 0 ? (
+        {items.length > 0 || canLoadMore ? (
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={{ maxHeight: LIST_MAX_HEIGHT }} contentContainerStyle={{ gap: spacing.md }}>
           <View>
             {items.map((e, i) => (
               <View
@@ -159,7 +162,7 @@ export function ActivityCard({ roles }: { roles: ActivityRole[] }) {
                 accessible
                 accessibilityLabel={`${e.actorName}, ${t(ROLE_KEY[e.actorRole])}: ${describe(t, e.type)}${describeDetail(t, e.type, e.detail) ? `, ${describeDetail(t, e.type, e.detail)}` : ''}`}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.border }}>
-                <Avatar uri={null} name={e.actorName} size={36} tint={avatarTint(theme, e.actorName)} />
+                <ProfileAvatar userId={e.actorId} name={e.actorName} size={36} tint={avatarTint(theme, e.actorName)} />
                 <View style={{ flex: 1, gap: 1 }}>
                   <AppText numberOfLines={1} style={{ fontWeight: '700', fontSize: 14 }}>
                     {e.actorName} <AppText muted style={{ fontWeight: '600', fontSize: 12 }}>· {t(ROLE_KEY[e.actorRole])}</AppText>
@@ -175,7 +178,6 @@ export function ActivityCard({ roles }: { roles: ActivityRole[] }) {
               </View>
             ))}
           </View>
-        ) : null}
 
         {moreError ? <Banner title={t('activity.error')} /> : null}
         {canLoadMore ? (
@@ -186,6 +188,8 @@ export function ActivityCard({ roles }: { roles: ActivityRole[] }) {
             style={{ minHeight: MIN_TAP, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1.5, borderColor: theme.border, opacity: loadingMore ? 0.6 : 1 }}>
             <AppText style={{ fontWeight: '700', fontSize: 14, color: theme.primary }}>{t('activity.more')}</AppText>
           </Pressable>
+        ) : null}
+          </ScrollView>
         ) : null}
       </View>
     </View>

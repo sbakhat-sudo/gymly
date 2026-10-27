@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, TextInput, View, type TextStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -26,7 +26,9 @@ export default function LoginScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { setGuest } = useAppState();
-  const [email, setEmail] = useState('');
+  // Opened from a notification that belongs to another account: its email is already filled in.
+  const params = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(typeof params.email === 'string' ? params.email : '');
   const [password, setPassword] = useState('');
   const [focused, setFocused] = useState<Field | null>(null);
   const [busy, setBusy] = useState(false);

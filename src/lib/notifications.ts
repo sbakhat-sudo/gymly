@@ -237,22 +237,22 @@ export async function cancelCheckinReminders(ids: CheckinNotificationIds): Promi
   }
 }
 
-/** How long to keep nagging after the 90-minute mark before giving up — never longer, since there is
- * no auto check-out behind it (a real Client's gym session; see `use-real-checkin.ts`). Capped well
- * under iOS's ~64 pending-local-notification limit together with anything else the app schedules. */
+/** How long to keep nagging after the 90-minute mark: until the 3-hour mark, when the Client is checked out
+ * automatically (see `use-real-checkin.ts`). Capped well under iOS's ~64 pending-local-notification limit
+ * together with anything else the app schedules. */
 const REPEAT_INTERVAL_MS = 10 * 60_000;
-const REPEAT_WINDOW_MS = 2 * 60 * 60_000;
+const REPEAT_WINDOW_MS = 80 * 60_000;
 
 /**
  * Real Client only: a bounded series of "sei ancora qui?" reminders, one at the 90-minute mark and
- * then every 10 minutes after that for up to 2 more hours — never a single one-off, and never
- * followed by an automatic check-out (there is none; see CLAUDE.md and `use-real-checkin.ts`).
+ * then every 10 minutes after that until the 3-hour mark, when the server checks the Client out by itself
+ * (see CLAUDE.md and `use-real-checkin.ts`) — never a single one-off.
  * Scheduled as a flat list instead of one repeating trigger because Expo's `TIME_INTERVAL` repeat
  * starts firing immediately at its own interval, not at a delayed 90-minute mark — scheduling each
  * occurrence up front is the only way to get "nothing for 90 minutes, then every 10" out of local
  * notifications alone (no background work is ever assumed; see constraint 1).
  */
-export async function scheduleRepeatingStillHereReminders(lang: Lang, siteName: string): Promise<string[]> {
+export async function scheduleRepeatingStillHereReminders(lang: Lang, siteName: string, userId: string, userEmail: string | null, sinceMs: number = Date.now()): Promise<string[]> {
   const N = await load();
   if (!N) return [];
   try {
@@ -264,14 +264,20 @@ export async function scheduleRepeatingStillHereReminders(lang: Lang, siteName: 
     const channelId = Platform.OS === 'android' ? CHECKIN_CHANNEL_ID : undefined;
     const ids: string[] = [];
     for (let elapsedMs = STILL_HERE_AFTER_MS; elapsedMs <= STILL_HERE_AFTER_MS + REPEAT_WINDOW_MS; elapsedMs += REPEAT_INTERVAL_MS) {
+      // Counted from `sinceMs` (the check-in itself), so a series made again later keeps the same moments; the ones that
+      // have already passed are skipped.
+      const seconds = (sinceMs + elapsedMs - Date.now()) / 1000;
+      if (seconds < 5) continue;
       const id = await N.scheduleNotificationAsync({
         content: {
           title: translate(lang, 'checkin.notification.stillHere.title'),
           body: translate(lang, 'checkin.notification.stillHere.body', { name: siteName }),
           categoryIdentifier: STILL_HERE_CATEGORY,
-          data: { url: '/(client)/checkin' },
+          // Whose reminder it is (and the email to sign in with): a button press only counts for the account that is signed
+          // in right now, and a tap from another account offers to switch to this one.
+          data: { url: '/(client)/checkin', userId, userEmail },
         },
-        trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: elapsedMs / 1000, channelId },
+        trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId },
       });
       ids.push(id);
     }
@@ -291,6 +297,43 @@ export async function cancelRepeatingReminders(ids: readonly string[]): Promise<
     for (const id of ids) await N.cancelScheduledNotificationAsync(id);
   } catch (e) {
     logger.error('notifications.repeating_checkin_cancel_failed', e);
+  }
+}
+
+/** The check-in reminders still waiting for this account (only this one's — another account on the same phone keeps its own). */
+async function pendingStillHereFor(N: typeof import('expo-notifications'), userId: string): Promise<string[]> {
+  const all = await N.getAllScheduledNotificationsAsync();
+  return all.filter((n) => n.content.categoryIdentifier === STILL_HERE_CATEGORY && n.content.data?.userId === userId).map((n) => n.identifier);
+}
+
+/** Whether this account has check-in reminders waiting. */
+export async function hasPendingStillHereReminders(userId: string): Promise<boolean> {
+  const N = await load();
+  if (!N) return false;
+  try {
+    return (await pendingStillHereFor(N, userId)).length > 0;
+  } catch (e) {
+    logger.error('notifications.pending_lookup_failed', e);
+    return false;
+  }
+}
+
+/**
+ * On sign-out: forgets the reminders of the account that just left — and only those. Another account that is checked in
+ * on this same phone keeps its own reminders, so signing in and out to switch accounts never silences one that is still
+ * inside the gym.
+ */
+export async function clearNotificationsOfUser(userId: string): Promise<void> {
+  const N = await load();
+  if (!N) return;
+  try {
+    for (const id of await pendingStillHereFor(N, userId)) await N.cancelScheduledNotificationAsync(id);
+    const shown = await N.getPresentedNotificationsAsync();
+    for (const n of shown) {
+      if (n.request.content.data?.userId === userId) await N.dismissNotificationAsync(n.request.identifier);
+    }
+  } catch (e) {
+    logger.error('notifications.clear_user_failed', e);
   }
 }
 
@@ -347,7 +390,7 @@ export type CheckinResponseHandlers = {
  * Wires the check-in action buttons to app logic. Registered once while the Check-in screen has
  * ever been visited this session (see `features/checkin/use-checkin.ts`); does nothing on web.
  */
-export function addCheckinResponseListener(handlers: CheckinResponseHandlers): () => void {
+export function addCheckinResponseListener(handlers: CheckinResponseHandlers, currentUserId?: () => string | null): () => void {
   if (Platform.OS === 'web') return () => undefined;
   let alive = true;
   let sub: { remove: () => void } | null = null;
@@ -355,6 +398,9 @@ export function addCheckinResponseListener(handlers: CheckinResponseHandlers): (
     .then((N) => {
       if (!alive) return;
       sub = N.addNotificationResponseReceivedListener((response) => {
+        // A reminder left over from another account (signed out, or switched) must not act on this one.
+        const owner = response.notification.request.content.data?.userId;
+        if (typeof owner === 'string' && currentUserId && owner !== currentUserId()) return;
         switch (response.actionIdentifier) {
           case STILL_HERE_YES_ACTION:
             handlers.onStillHereYes();

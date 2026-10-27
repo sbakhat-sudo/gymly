@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router/js-tabs';
 
-import { AlertTriangleIcon, BellIcon, ClockIcon, CreditCardIcon, HomeIcon, InboxIcon, PulseIcon, SlidersIcon, StarFilledIcon, UsersIcon } from '@/components/icons';
+import { AlertTriangleIcon, BellIcon, ClockIcon, CreditCardIcon, HomeIcon, PulseIcon, SlidersIcon, StarFilledIcon, UsersIcon } from '@/components/icons';
 import { PillTabBar } from '@/components/PillTabBar';
 import { RoleTopBar } from '@/components/RoleTopBar';
 import { ManagerNotifications } from '@/features/manager/ManagerNotifications';
@@ -28,14 +28,6 @@ export default function ManagerLayout() {
                 title: t('tab.manager.situation'),
                 tabBarAccessibilityLabel: t('tab.manager.situation'),
                 tabBarIcon: ({ color, size }) => <PulseIcon color={color} size={size} />,
-              }}
-            />
-            <Tabs.Screen
-              name="richieste"
-              options={{
-                title: t('tab.manager.requests'),
-                tabBarAccessibilityLabel: t('tab.manager.requests'),
-                tabBarIcon: ({ color, size }) => <InboxIcon color={color} size={size} />,
               }}
             />
             <Tabs.Screen

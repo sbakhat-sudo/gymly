@@ -5,14 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
-import { CheckIcon, ChevronRightIcon, ClockIcon, CreditCardIcon } from '@/components/icons';
+import { CheckIcon, ChevronRightIcon, ClockIcon, CreditCardIcon, XIcon } from '@/components/icons';
 import { useReduceMotion } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { CARD_SHADOW } from '@/lib/card-shadow';
 import { fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
-import { choosePlan, getAvailablePlanCards, type PlanCard } from './billing-api';
+import { choosePlan, getAvailablePlanCards, switchPlan, type PlanCard } from './billing-api';
 import { PaymentService } from '@/lib/billing/payment-service';
 import { TIER_BADGE_COLOR, TIER_LABEL_KEY } from './plan-tier';
 
@@ -30,7 +30,22 @@ import { TIER_BADGE_COLOR, TIER_LABEL_KEY } from './plan-tier';
  * The choices offered are the Client's own gym's real `site_plan_cards` (name + price the Manager
  * set, "Gestione abbonamenti" → "Le mie carte") — not a fixed Monthly/Annual pair.
  */
-export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone: () => void }) {
+export function PlanChoiceModal({
+  visible,
+  onDone,
+  mode = 'choose',
+  currentPlanName = null,
+  onClose,
+}: {
+  visible: boolean;
+  onDone: () => void;
+  /** `choose`: the mandatory first choice (cannot be dismissed). `switch`: "Cambia piano" from the home card —
+   * lists every plan with the current one marked, can be closed, and replaces the subscription from today. */
+  mode?: 'choose' | 'switch';
+  currentPlanName?: string | null;
+  onClose?: () => void;
+}) {
+  const switching = mode === 'switch';
   const { t } = useI18n();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -75,7 +90,7 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
     try {
       const result = await PaymentService.charge({ planName: card.name, priceEur: card.priceEur ?? 0 });
       if (!result.success) throw new Error('payment failed');
-      await choosePlan(card.id);
+      await (switching ? switchPlan(card.id) : choosePlan(card.id));
       setStep('choose');
       setCard(null);
       onDone();
@@ -87,7 +102,7 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
   }
 
   return (
-    <Modal visible={visible} transparent statusBarTranslucent>
+    <Modal visible={visible} transparent statusBarTranslucent onRequestClose={switching ? onClose : undefined}>
       {/* Explicit `absoluteFillObject`, not just `flex: 1` on the Modal's own content view — on some
           iOS/Expo Go combinations a plain flex:1 child of a transparent Modal doesn't reliably resolve
           to the full window height, which left the backdrop covering only the area around the card
@@ -119,13 +134,27 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
               },
               CARD_SHADOW,
             ]}>
-            <View style={{ alignItems: 'center', gap: spacing.sm }}>
+            {/* Only when changing plan: a small close button. The first plan choice has none — it cannot be skipped. */}
+            {switching ? (
+              <Pressable
+                onPress={onClose}
+                disabled={busy}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('billing.switch.close')}
+                style={({ pressed }) => ({ position: 'absolute', top: spacing.md, right: spacing.md, zIndex: 2, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceAlt, opacity: busy ? 0.4 : pressed ? 0.7 : 1 })}>
+                <XIcon color={theme.textMuted} size={16} />
+              </Pressable>
+            ) : null}
+            <View style={{ alignItems: 'center', gap: spacing.md }}>
               <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: `${theme.primary}1f`, alignItems: 'center', justifyContent: 'center' }}>
                 <CreditCardIcon color={theme.primary} size={24} />
               </View>
-              <AppText style={{ fontFamily: fontFamily.display, fontSize: 24, textAlign: 'center' }}>{t('billing.choice.title')}</AppText>
+              <AppText accessibilityRole="header" numberOfLines={2} style={{ fontFamily: fontFamily.display, fontSize: 22, lineHeight: 30, letterSpacing: -0.3, paddingTop: 4, textAlign: 'center' }}>
+                {t(switching ? 'billing.switch.title' : 'billing.choice.title')}
+              </AppText>
               <AppText muted style={{ fontSize: 13.5, lineHeight: 19, textAlign: 'center' }}>
-                {step === 'choose' ? t('billing.choice.subtitle') : t('billing.pay.subtitle')}
+                {step === 'choose' ? t(switching ? 'billing.switch.subtitle' : 'billing.choice.subtitle') : t('billing.pay.subtitle')}
               </AppText>
             </View>
 
@@ -135,15 +164,18 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
               ) : cards.data && cards.data.length === 0 ? (
                 <Banner title={t('billing.choice.empty')} />
               ) : (
-                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                   <View style={{ gap: spacing.sm }}>
                     {(cards.data ?? []).map((c) => {
                       const tint = c.color ?? theme.primary;
+                      const isCurrent = switching && currentPlanName !== null && c.name === currentPlanName;
                       return (
                       <Pressable
                         key={c.id}
                         onPress={() => pick(c)}
+                        disabled={isCurrent}
                         accessibilityRole="button"
+                        accessibilityState={{ disabled: isCurrent, selected: isCurrent }}
                         style={({ pressed }) => ({
                           flexDirection: 'row',
                           alignItems: 'flex-start',
@@ -155,12 +187,19 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
                           borderColor: theme.border,
                           borderLeftWidth: 3,
                           borderLeftColor: tint,
-                          transform: [{ scale: pressed ? 0.97 : 1 }],
+                          opacity: isCurrent ? 0.7 : 1,
+                          transform: [{ scale: pressed && !isCurrent ? 0.97 : 1 }],
                         })}>
                         <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: `${tint}1f`, alignItems: 'center', justifyContent: 'center' }}>
                           <ClockIcon color={tint} size={18} />
                         </View>
                         <View style={{ flex: 1, gap: 1 }}>
+                          {isCurrent ? (
+                            <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: theme.band.green.soft, marginBottom: 2 }}>
+                              <CheckIcon color={theme.band.green.onSoft} size={11} />
+                              <AppText style={{ color: theme.band.green.onSoft, fontSize: 10.5, fontWeight: '800' }}>{t('billing.switch.current')}</AppText>
+                            </View>
+                          ) : null}
                           {c.tier !== 'normal' ? (
                             <View
                               style={{ alignSelf: 'flex-start', paddingVertical: 2, paddingHorizontal: 7, borderRadius: radius.pill, backgroundColor: TIER_BADGE_COLOR[c.tier], marginBottom: 2 }}>
@@ -179,9 +218,11 @@ export function PlanChoiceModal({ visible, onDone }: { visible: boolean; onDone:
                             </AppText>
                           ) : null}
                         </View>
-                        <View style={{ marginTop: 10 }}>
-                          <ChevronRightIcon color={theme.textMuted} size={18} />
-                        </View>
+                        {isCurrent ? null : (
+                          <View style={{ marginTop: 10 }}>
+                            <ChevronRightIcon color={theme.textMuted} size={18} />
+                          </View>
+                        )}
                       </Pressable>
                       );
                     })}

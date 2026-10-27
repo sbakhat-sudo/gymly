@@ -5,6 +5,8 @@ export interface ChatConversation {
   conversationId: string;
   otherId: string;
   otherName: string | null;
+  /** The other person's photo, when they have one. */
+  otherAvatarUrl: string | null;
   lastBody: string | null;
   lastAt: string;
   unreadCount: number;
@@ -43,12 +45,13 @@ export async function openConversation(otherUserId: string): Promise<string> {
 }
 
 export async function getConversations(): Promise<ChatConversation[]> {
-  const { data, error } = await supabase.rpc('chat_get_conversations');
+  const { data, error } = await supabase.rpc('chat_get_conversations_with_photo');
   if (error) throw error;
   return data.map((c) => ({
     conversationId: c.conversation_id,
     otherId: c.other_id,
     otherName: c.other_name,
+    otherAvatarUrl: c.other_avatar_url,
     lastBody: c.last_body,
     lastAt: c.last_at,
     unreadCount: c.unread_count,

@@ -11,13 +11,12 @@ import { useAuth } from '@/lib/auth/auth-context';
 import { useReduceMotion } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { storage } from '@/lib/storage';
-import { isPlausibleName, isPlausiblePhone } from '@/lib/domain/input-checks';
 import { supabase } from '@/lib/supabase/client';
 import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { ManagerBadge, PlanCard, PLAN_NAME_KEY, PLAN_ORDER, type ManagerPlan } from './ManagerPlanCards';
 
 /**
- * The Owner's ("Titolare") own signup flow — a direct clone of `ManagerSignupScreen.tsx`'s
+ * The Owner's own signup flow — a direct clone of `ManagerSignupScreen.tsx`'s
  * mechanism (plan picker first, account details, Admin approval wait, then create their own
  * business), since Manager no longer self-registers at all (product decision): a Manager account is
  * only ever created by an Owner, via `owner_create_manager_record()` (already built, already active
@@ -32,8 +31,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
   const router = useRouter();
   const auth = useAuth();
   const [plan, setPlan] = useState<ManagerPlan | null>(initialPlan ?? null);
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [gymName, setGymName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -43,12 +41,8 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
 
   async function submit(): Promise<void> {
     if (!plan) return;
-    if (fullName.trim() && !isPlausibleName(fullName)) {
-      setError(t('auth.signup.error.invalidName'));
-      return;
-    }
-    if (phone.trim() && !isPlausiblePhone(phone)) {
-      setError(t('auth.signup.error.invalidPhone'));
+    if (gymName.trim().length < 2) {
+      setError(t('auth.signup.error.gymName'));
       return;
     }
     if (password.trim().length < 6) {
@@ -73,7 +67,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
       return;
     }
     if (data.session) {
-      const { error: rpcError } = await supabase.rpc('request_owner_signup', { p_plan: plan, p_full_name: fullName.trim() || null, p_phone: phone.trim() || null });
+      const { error: rpcError } = await supabase.rpc('request_owner_signup', { p_plan: plan, p_full_name: null, p_phone: null, p_gym_name: gymName.trim() });
       setBusy(false);
       if (rpcError) {
         setError(rpcError.message);
@@ -84,7 +78,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
     }
     // No session yet: email confirmation required first. Replayed once a session is available —
     // see complete-profile.tsx.
-    await storage.set('pendingOwnerPlan', { plan, fullName: fullName.trim(), phone: phone.trim() });
+    await storage.set('pendingOwnerPlan', { plan, fullName: '', phone: '', gymName: gymName.trim() });
     setBusy(false);
     setAwaitingConfirmation(true);
   }
@@ -155,7 +149,7 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
         {plan ? (
           <FadeSlideIn delay={80}>
             <View style={{ gap: spacing.lg }}>
-              <Field label={t('auth.signup.fullName')} value={fullName} onChangeText={setFullName} accessibilityLabel={t('auth.signup.fullName')} />
+              <Field label={t('auth.signup.gymName')} value={gymName} onChangeText={setGymName} accessibilityLabel={t('auth.signup.gymName')} />
               <Field
                 label={t('auth.signup.email')}
                 value={email}
@@ -163,17 +157,8 @@ export function OwnerSignupScreen({ initialPlan }: { initialPlan?: ManagerPlan }
                 accessibilityLabel={t('auth.signup.email')}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                autoComplete="email"
-                textContentType="emailAddress"
-              />
-              <Field
-                label={t('auth.signup.phone')}
-                value={phone}
-                onChangeText={setPhone}
-                accessibilityLabel={t('auth.signup.phone')}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                textContentType="telephoneNumber"
+                autoComplete="username"
+                textContentType="username"
               />
               <Field
                 label={t('auth.signup.password')}
@@ -240,8 +225,8 @@ function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   autoCorrect?: boolean;
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
-  autoComplete?: 'email' | 'name' | 'new-password' | 'tel';
-  textContentType?: 'emailAddress' | 'name' | 'newPassword' | 'telephoneNumber';
+  autoComplete?: 'username' | 'email' | 'name' | 'new-password' | 'tel';
+  textContentType?: 'username' | 'emailAddress' | 'name' | 'newPassword' | 'telephoneNumber';
   returnKeyType?: 'done';
   onSubmitEditing?: () => void;
 }) {

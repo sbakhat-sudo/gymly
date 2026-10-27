@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
-import { Banner } from '@/components/Banner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LogInIcon } from '@/components/icons';
 import { PageTitle } from '@/components/PageTitle';
 import { Screen } from '@/components/Screen';
 import { formatStopwatch } from '@/lib/domain/checkin';
-import { getSiteStatus } from '@/lib/gym-status';
+import { isGymOpenNow, usePolledSiteStatus } from '@/lib/gym-status';
+import { useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 
 import { CheckInButton } from './CheckInButton';
+import { CheckinNoticeCard, type CheckinNoticeTone } from './CheckinNoticeCard';
 import { useCheckinContext } from './checkin-context';
 
 /**
@@ -25,30 +25,27 @@ export function RealClientCheckInScreen({ siteId }: { siteId: string }) {
   const { t } = useI18n();
   const theme = useTheme();
   const checkin = useCheckinContext();
-  const [siteName, setSiteName] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    getSiteStatus(siteId).then((s) => alive && setSiteName(s.name));
-    return () => {
-      alive = false;
-    };
-  }, [siteId]);
+  const { site } = usePolledSiteStatus(siteId);
+  const now = useNow(30_000, true);
+  const siteName = site?.name ?? null;
 
   const checkedIn = checkin.phase !== null;
+  // Nobody checks in while the gym is closed (the database refuses it too); checking out stays possible.
+  const closedBlock = !checkedIn && site !== null && !isGymOpenNow(site, now);
   const elapsedLabel = checkedIn ? formatStopwatch(checkin.elapsedSeconds) : null;
-  const noticeText =
-    checkin.notice === 'offline'
-      ? t('checkin.error.offline')
-      : checkin.notice === 'autoCheckedOut'
-        ? t('checkin.autoCheckedOut')
-        : checkin.notice === 'locationTimeout'
-          ? t('checkin.error.locationTimeout')
-          : checkin.notice === 'generic'
-            ? t('checkin.error.generic')
-            : checkin.notice && typeof checkin.notice === 'object'
-            ? checkin.notice.server
-            : null;
+  // What to tell the member: a short title and one line. The server's own sentence (too far, not approved, expired
+  // subscription…) becomes the detail; "troppo lontano" gets its own friendlier wording.
+  let notice: { tone: CheckinNoticeTone; title: string; detail: string | null } | null = null;
+  if (checkin.notice === 'offline') notice = { tone: 'info', title: t('checkin.notice.offline.title'), detail: t('checkin.error.offline') };
+  else if (checkin.notice === 'autoCheckedOut') notice = { tone: 'info', title: t('checkin.notice.autoOut.title'), detail: t('checkin.autoCheckedOut.real') };
+  else if (checkin.notice === 'locationTimeout') notice = { tone: 'tooFar', title: t('checkin.notice.location.title'), detail: t('checkin.error.locationTimeout') };
+  else if (checkin.notice === 'generic') notice = { tone: 'info', title: t('checkin.notice.generic.title'), detail: t('checkin.error.generic') };
+  else if (checkin.notice && typeof checkin.notice === 'object') {
+    const tooFar = checkin.notice.server.toLowerCase().includes('troppo lontano');
+    notice = tooFar
+      ? { tone: 'tooFar', title: t('checkin.notice.tooFar.title'), detail: t('checkin.notice.tooFar.detail') }
+      : { tone: 'info', title: t('checkin.notice.unavailable.title'), detail: checkin.notice.server };
+  }
 
   return (
     <Screen orb={{ color: checkedIn ? theme.band.red.solid : theme.accent, top: 82, size: 360 }}>
@@ -61,11 +58,12 @@ export function RealClientCheckInScreen({ siteId }: { siteId: string }) {
 
       {siteName ? <AppText style={{ fontWeight: '600' }}>{siteName}</AppText> : null}
 
-      {noticeText ? <Banner message={noticeText} /> : null}
+      {closedBlock ? <CheckinNoticeCard tone="closed" title={t('checkin.notice.closed.title')} detail={t('checkin.notice.closed.detail')} /> : null}
+      {notice ? <CheckinNoticeCard tone={notice.tone} title={notice.title} detail={notice.detail} /> : null}
 
       <CheckInButton
         checkedIn={checkedIn}
-        busy={checkin.busy || checkin.loading}
+        busy={checkin.busy || checkin.loading || closedBlock}
         elapsedLabel={elapsedLabel}
         label={checkedIn ? t('checkin.button.out') : t('checkin.button.in')}
         accessibilityLabel={

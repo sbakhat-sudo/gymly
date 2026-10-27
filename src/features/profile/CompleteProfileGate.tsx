@@ -1,17 +1,19 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Avatar } from '@/components/Avatar';
 import { Banner } from '@/components/Banner';
 import { Button } from '@/components/Button';
-import { PlusIcon } from '@/components/icons';
+import { MapPinIcon, PlusIcon } from '@/components/icons';
+import { getSiteAddress } from '@/features/manager/manager-api';
 import { getOwnerChainName } from '@/features/owner/owner-api';
 import { useAuth } from '@/lib/auth/auth-context';
 import { formatBirthInput, parseBirthDate } from '@/lib/domain/birth-date';
 import { isPlausibleName } from '@/lib/domain/input-checks';
 import { useI18n } from '@/lib/i18n';
+import { suggestAddresses } from '@/lib/supabase/address-suggest';
 import { uploadAvatar } from '@/lib/supabase/avatar';
 import { supabase } from '@/lib/supabase/client';
 import { getSiteName } from '@/lib/supabase/site-name';
@@ -19,22 +21,26 @@ import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
 const MIN_PASSWORD = 8;
-const BASE_STEPS = 6;
+/** Photo, first name, last name, birth date, address — plus the new password for staff (a Client chose theirs at sign-up). */
+const BASE_STEPS = 5;
 
 /**
- * The mandatory first-login profile, for staff accounts only (Owner, Manager, Coach — never Admin,
- * never the phone-app Client): shown once, the first time someone enters after being approved (or, for
- * a Manager an Owner created by hand, after their first sign-in). It can't be dismissed — everything
+ * The mandatory first-login profile for Owner, Manager, Coach and Client (never Admin): shown once, the first
+ * time someone enters after being approved (or, for someone a Manager/Owner created by hand, after their first
+ * sign-in). Staff only ever see it on the web app; a Client sees it on the phone, right after choosing a plan. It can't be dismissed — everything
  * in it is required — but "Esci" is always there so nobody is ever stuck behind it. Completing it sets
  * `profiles.profile_completed_at` (via `complete_my_profile()`), which is what stops it from ever
  * showing again.
  */
-export function CompleteProfileGate() {
+export function CompleteProfileGate({ hold = false }: { hold?: boolean }) {
   const auth = useAuth();
   const profile = auth.status === 'active' || auth.status === 'owner' ? auth.profile : null;
-  const needsProfile = profile !== null && (profile.role === 'owner' || profile.role === 'manager' || profile.role === 'coach') && profile.profileCompletedAt === null;
-  // Staff only ever use the web app (the phone shows them a "use the web version" screen instead).
-  return needsProfile && Platform.OS === 'web' ? <CompleteProfileModal /> : null;
+  const needsProfile =
+    profile !== null && (profile.role === 'owner' || profile.role === 'manager' || profile.role === 'coach' || profile.role === 'client') && profile.profileCompletedAt === null;
+  // Staff only ever use the web app (the phone shows them a "use the web version" screen instead); a Client is on the phone.
+  // `hold`: another mandatory popup (a Client's plan choice) is on screen first — two popups cannot be presented at
+  // once on a phone, so this one waits its turn and appears as soon as the other is done.
+  return !hold && needsProfile && (profile.role === 'client' || Platform.OS === 'web') ? <CompleteProfileModal /> : null;
 }
 
 /** A labelled form row. Defined at module level on purpose: declared inside the modal it would be a new
@@ -66,6 +72,9 @@ function CompleteProfileModal() {
   const [lastName, setLastName] = useState(profile?.lastName ?? '');
   const [birth, setBirth] = useState('');
   const [address, setAddress] = useState(profile?.homeAddress ?? '');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  // True right after a suggestion is picked (or while nothing new was typed), so the list stays closed.
+  const [addressPicked, setAddressPicked] = useState(false);
   const [gymEdit, setGymEdit] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -80,7 +89,18 @@ function CompleteProfileModal() {
   const [photoError, setPhotoError] = useState(false);
 
   const isOwner = profile?.role === 'owner';
+  const isClient = profile?.role === 'client';
+  // A Client chose their password at sign-up; staff set a new one here (replacing the temporary one they were handed).
+  const needsPassword = !isClient;
   const siteId = profile && !isOwner && 'siteId' in profile ? profile.siteId : null;
+  const isCoach = profile?.role === 'coach';
+  // A Coach's address — and that of a Client the Manager added (no address of their own on file) — is the gym's own,
+  // set when the Owner added the Manager: shown, never asked (the database stores it regardless of what is sent).
+  // A Client who signed up alone gave their own at sign-up, so theirs stays editable. Until the gym's is known, or
+  // if the gym has none, the field stays editable too.
+  const addressIsGyms = isCoach || (isClient && !profile?.homeAddress);
+  const gymAddress = useAsync(() => (siteId ? getSiteAddress(siteId) : Promise.resolve(null)), [siteId], addressIsGyms && siteId !== null);
+  const lockedAddress = addressIsGyms ? (gymAddress.data ?? null) : null;
   const chainName = useAsync(() => getOwnerChainName(), [], isOwner);
   const fixedGym = useAsync(() => (siteId ? getSiteName(siteId) : Promise.resolve(null)), [siteId], siteId !== null);
   // Until the Owner has typed the real name, the business carries a placeholder (their own name) — don't
@@ -88,17 +108,34 @@ function CompleteProfileModal() {
   const placeholderName = chainName.data === (profile?.fullName ?? null);
   const gymName = gymEdit ?? (chainName.data && !placeholderName ? chainName.data : '');
   const gymOk = gymName.trim().length >= 2;
-  const totalSteps = BASE_STEPS + (isOwner ? 1 : 0);
+  const totalSteps = BASE_STEPS + (needsPassword ? 1 : 0) + (isOwner ? 1 : 0);
 
   const hasPhoto = Boolean(profile?.avatarUrl);
   const firstOk = isPlausibleName(firstName);
   const lastOk = isPlausibleName(lastName);
   const birthIso = parseBirthDate(birth);
-  const addressOk = address.trim().length >= 5;
+  const finalAddress = lockedAddress ?? address;
+  const addressOk = finalAddress.trim().length >= 5;
   const passwordOk = password.length >= MIN_PASSWORD;
   const passwordsMatch = password === password2;
-  const done = [hasPhoto, firstOk, lastOk, birthIso !== null, addressOk, passwordOk && passwordsMatch && password2.length > 0, ...(isOwner ? [gymOk] : [])].filter(Boolean).length;
+  const done = [hasPhoto, firstOk, lastOk, birthIso !== null, addressOk, ...(needsPassword ? [passwordOk && passwordsMatch && password2.length > 0] : []), ...(isOwner ? [gymOk] : [])].filter(Boolean).length;
   const allOk = done === totalSteps;
+
+  // Suggestions for the typed address, asked of the server half a second after typing stops.
+  useEffect(() => {
+    if (addressPicked || address.trim().length < 4) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      void suggestAddresses(address.trim()).then((found) => {
+        if (alive) setSuggestions(found);
+      });
+    }, 500);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [address, addressPicked]);
+  const showSuggestions = !addressPicked && address.trim().length >= 4 && suggestions.length > 0;
 
   async function pickPhoto(): Promise<void> {
     if (!userId) return;
@@ -133,7 +170,7 @@ function CompleteProfileModal() {
 
     setBusy(true);
     try {
-      if (!passwordSet) {
+      if (needsPassword && !passwordSet) {
         const { error: passwordError } = await supabase.auth.updateUser({ password });
         if (passwordError) {
           // Supabase refuses a password equal to the current one — i.e. the temporary password the Manager/Owner
@@ -151,7 +188,7 @@ function CompleteProfileModal() {
         p_first_name: firstName,
         p_last_name: lastName,
         p_birth_date: birthIso,
-        p_home_address: address,
+        p_home_address: finalAddress,
         p_gym_name: isOwner ? gymName : null,
       });
       if (error) throw error;
@@ -178,7 +215,7 @@ function CompleteProfileModal() {
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => undefined}>
       <View style={{ flex: 1, backgroundColor: 'rgba(8,10,20,0.62)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg }}>
         <View style={{ width: '100%', maxWidth: 520, maxHeight: '96%', borderRadius: radius.sheet, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.glassBorder, overflow: 'hidden' }}>
-          <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false}>
             <View style={{ alignItems: 'center', gap: spacing.sm }}>
               <Pressable
                 onPress={() => void pickPhoto()}
@@ -297,20 +334,60 @@ function CompleteProfileModal() {
               />
             </Field>
 
+            {lockedAddress ? (
+              <Field label={t('profileSetup.address.gym')}>
+                <TextInput value={lockedAddress} editable={false} accessibilityLabel={t('profileSetup.address.gym')} style={[inputStyle, { backgroundColor: theme.surfaceAlt, color: theme.textMuted }]} />
+                <AppText variant="caption" muted>
+                  {t('profileSetup.address.gym.hint')}
+                </AppText>
+              </Field>
+            ) : (
             <Field label={t('profileSetup.address')} error={submitted && !addressOk ? t('profileSetup.address.short') : null}>
               <TextInput
                 value={address}
-                onChangeText={setAddress}
+                onChangeText={(v) => {
+                  setAddress(v);
+                  setAddressPicked(false);
+                }}
                 placeholder={t('profileSetup.address.placeholder')}
                 placeholderTextColor={theme.textMuted}
-                autoComplete="street-address"
-                textContentType="fullStreetAddress"
+                // Off on purpose: the browser's own saved-address popup would cover the suggestions list below.
+                autoComplete="off"
+                autoCorrect={false}
                 accessibilityLabel={t('profileSetup.address')}
                 maxLength={200}
                 style={inputStyle}
               />
+              {showSuggestions ? (
+                <View style={{ maxHeight: 220, borderWidth: 1, borderColor: theme.border, borderRadius: radius.md, overflow: 'hidden', backgroundColor: theme.surface }}>
+                  <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {suggestions.map((s, i) => (
+                      <Pressable
+                        key={s}
+                        accessibilityRole="button"
+                        accessibilityLabel={s}
+                        onPress={() => {
+                          setAddress(s);
+                          setAddressPicked(true);
+                          setSuggestions([]);
+                        }}
+                        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: MIN_TAP, paddingHorizontal: spacing.md, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: theme.border }, pressed ? { backgroundColor: theme.surfaceAlt } : null]}>
+                        <MapPinIcon color={theme.textMuted} size={18} />
+                        <AppText style={{ flex: 1, fontSize: 14 }}>{s}</AppText>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
             </Field>
+            )}
 
+            {/* The account's email as the form's invisible username, so the browser saves the new password against it and not
+                against the address typed just above. Web only; never reachable by keyboard. */}
+            {needsPassword && Platform.OS === 'web' && email ? (
+              <TextInput value={email} editable={false} focusable={false} autoComplete="username" style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+            ) : null}
+            {needsPassword ? (
             <View style={{ flexDirection: 'row', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
                 <Field label={t('profileSetup.password')} error={samePassword ? t('profileSetup.password.sameAsOld') : submitted && !passwordOk ? t('profileSetup.password.short') : null}>
@@ -344,6 +421,8 @@ function CompleteProfileModal() {
                 </Field>
               </View>
             </View>
+
+            ) : null}
 
             {saveError ? <Banner title={t('profileSetup.error')} /> : null}
 
