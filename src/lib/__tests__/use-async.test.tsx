@@ -80,11 +80,33 @@ describe('useAsync auto-refresh', () => {
     await flush();
     expect(fn).toHaveBeenCalledTimes(1);
 
+    // one interval at a time, letting each answer come back before the next tick
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        jest.advanceTimersByTime(AUTO_REFRESH_MS);
+      });
+      await flush();
+    }
+    expect(fn).toHaveBeenCalledTimes(4);
+  });
+
+  it('never starts a read while the previous one is still out', async () => {
+    // The first read (the loud one) answers; every quiet one hangs, like a slow network.
+    let calls = 0;
+    const fn = jest.fn(() => {
+      calls += 1;
+      return calls === 1 ? Promise.resolve(1) : new Promise<number>(() => undefined);
+    });
+    await render(<Probe fn={fn} />);
+    await flush();
+    expect(fn).toHaveBeenCalledTimes(1);
+
     await act(async () => {
-      jest.advanceTimersByTime(AUTO_REFRESH_MS * 3);
+      jest.advanceTimersByTime(AUTO_REFRESH_MS * 10);
     });
     await flush();
-    expect(fn).toHaveBeenCalledTimes(4);
+    // one quiet read started at the first tick; the other nine ticks found it still in flight and waited
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 
   it('stops while the app is in the background', async () => {

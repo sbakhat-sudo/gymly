@@ -19,7 +19,7 @@ import { useAppActive, useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { getWeekRealBands } from '@/lib/real-schedule';
 import { spacing, useTheme } from '@/lib/theme';
-import { useAsync } from '@/lib/use-async';
+import { SLOW_REFRESH_MS, useAsync } from '@/lib/use-async';
 
 import { AnnouncementsStrip } from './client/AnnouncementsStrip';
 import { ClientPlanCard } from './client/ClientPlanCard';
@@ -56,7 +56,8 @@ export function RealClientLiveScreen({ siteId }: { siteId: string }) {
   const recentBands = useAsync(
     () => Promise.all([...new Set(recent.map((r) => r.weekStart))].map((w) => getWeekRealBands(siteId, w))).then((weeks) => weeks.flat()),
     [siteId, recentKey],
-    site !== null
+    site !== null,
+    SLOW_REFRESH_MS
   );
 
   const subscription = useAsync(() => getMySubscription(), [focused], focused);

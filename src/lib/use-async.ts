@@ -7,9 +7,16 @@ import { logger } from './logger';
 /**
  * How often every `useAsync` quietly re-reads its data while the app is on screen, so what other people do
  * (a Client checks in, a payment is recorded, a message arrives) shows up by itself — nobody has to reload the
- * page. Pass `false` as the fourth argument to switch it off for one call.
+ * page. Pass a different number — or `false` to switch it off — as the fourth argument for one call.
+ *
+ * Every second is as fast as a poll gets, and it costs one request per read per second per open screen: the
+ * heavy, slow-moving reads (several weeks of hourly history) ask for `SLOW_REFRESH_MS` instead, and a read that
+ * is still in flight is never started twice (see the interval below).
  */
-export const AUTO_REFRESH_MS = 10_000;
+export const AUTO_REFRESH_MS = 1_000;
+
+/** For reads of long history that cannot change second by second. */
+export const SLOW_REFRESH_MS = 10_000;
 
 export interface AsyncState<T> {
   data: T | undefined;
@@ -87,9 +94,14 @@ export function useAsync<T>(fn: () => Promise<T>, deps: readonly unknown[], enab
   useEffect(() => {
     if (!enabled || !foreground || refreshMs === false) return;
     let alive = true;
+    // At one-second polling a slow answer must not pile requests up: while one is still out, the next tick waits.
+    let inFlight = false;
     const tick = (): void => {
+      if (inFlight) return;
+      inFlight = true;
       fn().then(
         (data) => {
+          inFlight = false;
           if (!alive) return;
           setSettled((s) => {
             // Only once this request's own first result is in, and only if something actually changed.
@@ -99,7 +111,9 @@ export function useAsync<T>(fn: () => Promise<T>, deps: readonly unknown[], enab
           });
         },
         // A failed quiet refresh changes nothing: the screen keeps showing the last good data.
-        () => undefined
+        () => {
+          inFlight = false;
+        }
       );
     };
     const id = setInterval(tick, refreshMs);

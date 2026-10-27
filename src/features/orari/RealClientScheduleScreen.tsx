@@ -15,7 +15,7 @@ import { useNow } from '@/lib/hooks';
 import { useI18n } from '@/lib/i18n';
 import { getWeekRealBands } from '@/lib/real-schedule';
 import { spacing, useTheme } from '@/lib/theme';
-import { useAsync } from '@/lib/use-async';
+import { SLOW_REFRESH_MS, useAsync } from '@/lib/use-async';
 
 import { HistoryStatsTiles, WeeklyProgressCard } from './HistoryCards';
 import { MyVisitsCard, type MyVisit } from './MyVisitsCard';
@@ -50,7 +50,8 @@ export function RealClientScheduleScreen({ siteId }: { siteId: string }) {
   const recentBands = useAsync(
     () => Promise.all(Array.from({ length: WEEKS_BACK }, (_, i) => getWeekRealBands(siteId, addDays(weekStart, -7 * i)))).then((weeks) => weeks.flat()),
     [siteId, weekStart],
-    site.data !== undefined
+    site.data !== undefined,
+    SLOW_REFRESH_MS
   );
   const auth = useAuth();
   const userId = 'session' in auth ? auth.session.user.id : null;
