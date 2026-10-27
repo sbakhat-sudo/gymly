@@ -15,6 +15,7 @@ import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
+import { OwnerPlanDueCard } from './OwnerPlanDueCard';
 import { getOwnerOverview, getOwnerPlanBilling, getOwnerSubscriptionTrend, type OwnerSubscriptionRow, type OwnerSubscriptionTrendPoint } from './owner-api';
 
 type IconType = (p: { color: string; size: number }) => React.ReactElement;
@@ -336,7 +337,7 @@ function SubscriptionTrendCard({ months }: { months: OwnerSubscriptionTrendPoint
 }
 
 export function OwnerDashboardScreen() {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const theme = useTheme();
   const isSidebar = useSidebarMode();
   const overview = useAsync(() => getOwnerOverview(), []);
@@ -349,7 +350,6 @@ export function OwnerDashboardScreen() {
   // begin, which is what turns this from a heads-up into the "pay now or we deactivate you" notice.
   // Plain text on a Banner (icon + words), never colour alone.
   const graceEnd = billing.data?.status === 'grace' && billing.data.graceEnd ? new Date(billing.data.graceEnd) : null;
-  const graceEndLabel = graceEnd ? graceEnd.toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
   const revenueLabel = overview.data ? `€${overview.data.revenueEur.toLocaleString('it-IT')}` : '—';
 
@@ -368,10 +368,7 @@ export function OwnerDashboardScreen() {
       ) : null}
 
       {graceEnd ? (
-        <Banner
-          title={t(billing.data?.warningSent ? 'owner.billing.lastDay.title' : 'owner.billing.grace.title')}
-          message={t(billing.data?.warningSent ? 'owner.billing.lastDay.body' : 'owner.billing.grace.body', { date: graceEndLabel })}
-        />
+        <OwnerPlanDueCard graceEnd={graceEnd} lastDay={billing.data?.warningSent === true} />
       ) : null}
 
       {overview.error ? <Banner title={t('owner.dashboard.error')} /> : null}
