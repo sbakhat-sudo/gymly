@@ -150,6 +150,10 @@ function NavigatorStack({
   // deliberate exception: a marketing preview of the Client app, allowed on web too.
   const clientEligible = (auth.status === 'active' && auth.profile.role === 'client' && !needsPermissionsScreen) || (auth.status !== 'active' && guest);
   const realClientNative = auth.status === 'active' && isNative && auth.profile.role === 'client';
+  // The first-login popups (plan choice, then profile) wait for the permissions screen to be done: a native Modal
+  // presented while the navigator is still swapping screens can be dropped, leaving nothing on screen but a flag
+  // that says it is showing.
+  const clientReady = realClientNative && !needsPermissionsScreen;
 
   // Billing: whether this real Client must see the mandatory plan-choice popup, and whether a local
   // "ti bloccheremo tra poco" warning needs (re)scheduling — both driven by one poll of the same RPC,
@@ -282,7 +286,7 @@ function NavigatorStack({
     <ThemeProvider value={navigationTheme}>
       {/* Reflects the resolved theme (Settings → Aspetto), not just the OS scheme: 'auto' still tracks it live via useTheme(). */}
       <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-      {realClientNative ? <PlanChoiceModal visible={subscription.data?.needsPlanChoice === true} onDone={() => subscription.reload()} /> : null}
+      {clientReady ? <PlanChoiceModal visible={subscription.data?.needsPlanChoice === true} onDone={() => subscription.reload()} /> : null}
       <Stack screenOptions={{ headerShown: false }}>
         {/* A guest (Benvenuto → "Guarda l'affluenza senza account") gets the member app without
             signing in; `demo` ("Prova la demo") additionally allows it on web. */}
@@ -334,7 +338,7 @@ function NavigatorStack({
         <Stack.Screen name="feedback/[checkinId]" options={{ presentation: 'modal' }} />
       </Stack>
       {/* Mandatory first-login profile for Owner/Manager/Coach — a popup over whatever they land on. */}
-      <CompleteProfileGate hold={realClientNative && ((subscription.data === undefined && subscription.error === null) || subscription.data?.needsPlanChoice === true)} />
+      <CompleteProfileGate hold={realClientNative && (needsPermissionsScreen || (subscription.data === undefined && subscription.error === null) || subscription.data?.needsPlanChoice === true)} />
       <ConfirmDialog
         visible={switchPrompt !== null}
         title={t('notification.otherAccount.title')}
