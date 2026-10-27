@@ -234,6 +234,17 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
           },
           glow(),
         ]}>
+        {/* The profile (photo + role) stays put: it sits outside the scrolling list, so scrolling the icons never moves it. */}
+        {profile ? (
+          <View style={{ alignItems: 'center', gap: 4, marginBottom: spacing.md }}>
+            <Avatar uri={profile.avatarUrl} name={profile.fullName} size={48} />
+            {roleLabel ? (
+              <AppText variant="caption" muted style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.2 }}>
+                {roleLabel}
+              </AppText>
+            ) : null}
+          </View>
+        ) : null}
         {/* `flex: 1` + its own scroll: with enough tabs (Manager now has 8) the column can outgrow a
             short window — without this the overflow was simply clipped, hiding the last tabs and
             sign-out entirely with no way to reach them. Sign-out stays outside, always pinned. */}
@@ -241,16 +252,6 @@ function Sidebar({ state, descriptors, navigation }: BottomTabBarProps) {
           style={{ flex: 1, width: '100%' }}
           contentContainerStyle={{ gap: spacing.sm, alignItems: 'center', paddingBottom: spacing.sm }}
           showsVerticalScrollIndicator={false}>
-          {profile ? (
-            <View style={{ alignItems: 'center', gap: 4, marginBottom: spacing.md }}>
-              <Avatar uri={profile.avatarUrl} name={profile.fullName} size={48} />
-              {roleLabel ? (
-                <AppText variant="caption" muted style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.2 }}>
-                  {roleLabel}
-                </AppText>
-              ) : null}
-            </View>
-          ) : null}
           {state.routes.map((route) => {
             const descriptor = descriptors[route.key];
             if (!descriptor) return null;
