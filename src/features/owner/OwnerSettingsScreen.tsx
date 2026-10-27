@@ -18,6 +18,7 @@ import { useI18n } from '@/lib/i18n';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 
+import { OwnerPlanSection } from './OwnerPlanSection';
 import { getOwnerChainName, renameOwnerChain } from './owner-api';
 
 /** The chain name gets an auto-generated default (the Owner's own full name) the moment Admin
@@ -136,6 +137,8 @@ export function OwnerSettingsScreen() {
       <SettingsGroup title={t('owner.settings.gym.title')}>
         <ChainNameRow />
       </SettingsGroup>
+
+      <OwnerPlanSection />
 
       <ActivityCard roles={['manager', 'coach', 'client']} />
 

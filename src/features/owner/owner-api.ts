@@ -83,6 +83,13 @@ export async function getOwnerSubscriptionWeeks(): Promise<OwnerSubscriptionWeek
   return data.map((r) => ({ weekNo: r.week_no, rangeStart: r.range_start, rangeEnd: r.range_end, planKey: r.plan_key, planName: r.plan_name, planColor: r.plan_color, kind: r.kind, subscribers: r.subscribers, revenueEur: r.revenue_eur }));
 }
 
+/** Moves the Owner's whole chain to another paid plan. Never back to Trial: the database refuses it, and the
+ * type makes it impossible to ask. Leaving Trial makes the paid plan due at once (see `owner_change_plan()`). */
+export async function changeOwnerPlan(plan: 'pro' | 'business'): Promise<void> {
+  const { error } = await supabase.rpc('owner_change_plan', { p_plan: plan });
+  if (error) throw error;
+}
+
 /** The Owner's own app-plan payment state — `grace` means the automatic 3-day window is running;
  * `warningSent` flips once the last 24 hours before automatic deactivation begin. */
 export interface OwnerPlanBilling {

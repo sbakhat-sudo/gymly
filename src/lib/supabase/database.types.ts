@@ -588,6 +588,10 @@ export interface Database {
         Args: { p_id: string };
         Returns: undefined;
       };
+      owner_change_plan: {
+        Args: { p_plan: 'trial' | 'pro' | 'business' };
+        Returns: undefined;
+      };
       chat_get_my_owner: {
         Args: Record<string, never>;
         Returns: { owner_id: string; owner_name: string | null }[];
