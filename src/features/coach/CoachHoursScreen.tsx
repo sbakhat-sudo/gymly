@@ -111,7 +111,7 @@ export function CoachHoursScreen() {
               </AppText>
             </View>
             <AppText variant="display" style={{ fontSize: 26 }}>
-              {formatHoursDuration(totalWeekSeconds)}
+              {formatHoursMinutes(totalWeekSeconds)}
             </AppText>
           </Card>
           <Card style={{ flexGrow: 1, flexBasis: 180, gap: spacing.sm }}>

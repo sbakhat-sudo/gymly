@@ -93,9 +93,9 @@ export function WorkHoursScreen() {
 
       {shifts.data ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-          <StatCard icon={<ClockIcon color={theme.primary} size={18} />} label={t('manager.workHours.stat.totalHours')} value={formatHoursDuration(totalWeekSeconds)} />
+          <StatCard icon={<ClockIcon color={theme.primary} size={18} />} label={t('manager.workHours.stat.totalHours')} value={formatHoursMinutes(totalWeekSeconds)} />
           <StatCard icon={<UsersIcon color={theme.primary} size={18} />} label={t('manager.workHours.stat.daysLogged')} value={String(daysLogged)} />
-          <StatCard icon={<CheckIcon color={theme.primary} size={18} />} label={t('manager.workHours.stat.avgDaily')} value={formatHoursDuration(avgDailySeconds)} />
+          <StatCard icon={<CheckIcon color={theme.primary} size={18} />} label={t('manager.workHours.stat.avgDaily')} value={formatHoursMinutes(avgDailySeconds)} />
           <StatCard icon={<PulseIcon color={theme.primary} size={18} />} label={t('manager.workHours.stat.onDuty')} value={String(onDutyNow)} />
         </View>
       ) : null}
