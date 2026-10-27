@@ -1176,7 +1176,7 @@ export const it = {
   'owner.dashboard.trend.total': 'tot. {count}',
   'owner.dashboard.trend.totals': '{count} totali',
   'owner.dashboard.trend.week': 'Sett. {n}',
-  'owner.dashboard.trend.titleMonthly': 'Abbonamenti mensili · {month}',
+  'owner.dashboard.trend.titleMonthly': 'Abbonamenti mensili · ultimi 12 mesi',
   'owner.dashboard.trend.titleAnnual': 'Abbonamenti annuali · ultimi 12 mesi',
   'owner.dashboard.activity.title': 'Attività degli ultimi 7 giorni',
   'owner.managers.title': 'Gestione dei Manager',

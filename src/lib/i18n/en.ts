@@ -1205,7 +1205,7 @@ export const en: Record<TranslationKey, string> = {
   'owner.dashboard.trend.total': 'total {count}',
   'owner.dashboard.trend.totals': '{count} total',
   'owner.dashboard.trend.week': 'Wk {n}',
-  'owner.dashboard.trend.titleMonthly': 'Monthly subscriptions · {month}',
+  'owner.dashboard.trend.titleMonthly': 'Monthly subscriptions · last 12 months',
   'owner.dashboard.trend.titleAnnual': 'Annual subscriptions · last 12 months',
   'owner.dashboard.activity.title': 'Activity over the last 7 days',
   'owner.managers.title': 'Manager management',

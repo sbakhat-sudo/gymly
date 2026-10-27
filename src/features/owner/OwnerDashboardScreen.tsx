@@ -15,7 +15,7 @@ import { MIN_TAP, fontFamily, radius, spacing, useTheme } from '@/lib/theme';
 import { useAsync } from '@/lib/use-async';
 import { useSidebarMode } from '@/lib/use-sidebar-mode';
 
-import { getOwnerOverview, getOwnerPlanBilling, getOwnerSubscriptionTrend, getOwnerSubscriptionWeeks, type OwnerSubscriptionRow, type OwnerSubscriptionTrendPoint, type OwnerSubscriptionWeekPoint } from './owner-api';
+import { getOwnerOverview, getOwnerPlanBilling, getOwnerSubscriptionTrend, type OwnerSubscriptionRow, type OwnerSubscriptionTrendPoint } from './owner-api';
 
 type IconType = (p: { color: string; size: number }) => React.ReactElement;
 
@@ -194,11 +194,10 @@ interface TrendSeries {
  * coloured segment per plan the clients chose (the Owner's own plans, plus any a Manager made that someone paid
  * for), the count written inside every segment and the column's total above it. Hand-rolled SVG like the other
  * charts in this app. */
-function SubscriptionTrendCard({ months, weeks }: { months: OwnerSubscriptionTrendPoint[]; weeks: OwnerSubscriptionWeekPoint[] }) {
+function SubscriptionTrendCard({ months }: { months: OwnerSubscriptionTrendPoint[] }) {
   const { t, lang } = useI18n();
   const theme = useTheme();
-  // Two views: the monthly subscriptions week by week through this month, and the annual ones month by month
-  // (an annual plan is only paid once a year, so weeks would be empty).
+  // Two views: the monthly subscriptions and the annual ones, each month by month.
   const [view, setView] = useState<'monthly' | 'annual'>('monthly');
   const locale = lang === 'it' ? 'it-IT' : 'en-GB';
   const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1).replace('.', '');
@@ -206,42 +205,24 @@ function SubscriptionTrendCard({ months, weeks }: { months: OwnerSubscriptionTre
   // One series per plan, in the order the database lists them (oldest plan first). A plan keeps its colour
   // whichever view is open; each view shows only the plans of its own kind.
   const allSeries: TrendSeries[] = [];
-  for (const p of [...months, ...weeks]) {
+  for (const p of months) {
     if (allSeries.some((s) => s.key === p.planKey)) continue;
     allSeries.push({ key: p.planKey, name: p.planName, kind: p.kind, color: p.planColor ?? TREND_FALLBACK_COLORS[allSeries.length % TREND_FALLBACK_COLORS.length] ?? '#8B5CF6' });
   }
   const series = allSeries.filter((s) => s.kind === view);
 
-  const dayMonth = (iso: string): string => {
-    const d = new Date(`${iso}T00:00:00`);
-    return `${d.getDate()}/${d.getMonth() + 1}`;
-  };
-  const bars: TrendBar[] =
-    view === 'monthly'
-      ? Array.from(new Set(weeks.map((w) => w.weekNo))).map((n) => {
-          const rows = weeks.filter((w) => w.weekNo === n);
-          const first = rows[0];
-          const start = first ? dayMonth(first.rangeStart) : '';
-          const end = first ? dayMonth(first.rangeEnd) : '';
-          return {
-            key: `w${n}`,
-            label: t('owner.dashboard.trend.week', { n }),
-            sub: start === end ? start : `${start}–${end}`,
-            values: Object.fromEntries(rows.map((r) => [r.planKey, r.subscribers])),
-          };
-        })
-      : Array.from(new Set(months.map((m) => m.monthStart))).map((m) => ({
-          key: m,
-          label: capitalize(new Date(`${m}T00:00:00`).toLocaleDateString(locale, { month: 'short' })),
-          sub: String(new Date(`${m}T00:00:00`).getFullYear()),
-          values: Object.fromEntries(months.filter((r) => r.monthStart === m).map((r) => [r.planKey, r.subscribers])),
-        }));
+  // Both views run month by month over the last 12 months; each shows only the plans of its own kind.
+  const bars: TrendBar[] = Array.from(new Set(months.map((m) => m.monthStart))).map((m) => ({
+    key: m,
+    label: capitalize(new Date(`${m}T00:00:00`).toLocaleDateString(locale, { month: 'short' })),
+    sub: String(new Date(`${m}T00:00:00`).getFullYear()),
+    values: Object.fromEntries(months.filter((r) => r.monthStart === m).map((r) => [r.planKey, r.subscribers])),
+  }));
 
   const totalOf = (b: TrendBar): number => series.reduce((sum, s) => sum + (b.values[s.key] ?? 0), 0);
   const max = Math.max(1, ...bars.map(totalOf));
   const grandTotal = bars.reduce((sum, b) => sum + totalOf(b), 0);
   const seriesLabel = (s: TrendSeries): string => `${s.name} · ${t(s.kind === 'monthly' ? 'owner.dashboard.subscriptions.monthly' : 'owner.dashboard.subscriptions.annual')}`;
-  const monthName = capitalize(new Date().toLocaleDateString(locale, { month: 'long' }));
 
   const plotH = TREND_H - TREND_TOP - TREND_BOTTOM;
   const plotW = TREND_W - TREND_LEFT;
@@ -263,7 +244,7 @@ function SubscriptionTrendCard({ months, weeks }: { months: OwnerSubscriptionTre
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <IconBadge icon={PulseIcon} tint={theme.primary} />
         <View style={{ flex: 1, minWidth: 180, gap: 1 }}>
-          <AppText style={{ fontWeight: '700', fontSize: 16 }}>{view === 'monthly' ? t('owner.dashboard.trend.titleMonthly', { month: monthName }) : t('owner.dashboard.trend.titleAnnual')}</AppText>
+          <AppText style={{ fontWeight: '700', fontSize: 16 }}>{view === 'monthly' ? t('owner.dashboard.trend.titleMonthly') : t('owner.dashboard.trend.titleAnnual')}</AppText>
           <AppText variant="caption" muted>
             {t('owner.dashboard.trend.hint')}
           </AppText>
@@ -361,7 +342,6 @@ export function OwnerDashboardScreen() {
   const overview = useAsync(() => getOwnerOverview(), []);
   const billing = useAsync(() => getOwnerPlanBilling(), []);
   const trend = useAsync(() => getOwnerSubscriptionTrend(12), []);
-  const weeks = useAsync(() => getOwnerSubscriptionWeeks(), []);
   const [detailsOpen, setDetailsOpen] = useState(false);
   usePageHeader(PulseIcon, t('owner.dashboard.title'));
 
@@ -405,7 +385,7 @@ export function OwnerDashboardScreen() {
               <KpiCard index={2} icon={UsersIcon} tint={theme.band.amber.solid} label={t('owner.dashboard.coaches')} value={String(overview.data.coaches)} />
               <KpiCard index={3} icon={CreditCardIcon} tint={theme.primaryDeep} label={t('owner.dashboard.revenue')} value={revenueLabel} onPress={() => setDetailsOpen(true)} />
             </View>
-            {trend.data ? <SubscriptionTrendCard months={trend.data} weeks={weeks.data ?? []} /> : null}
+            {trend.data ? <SubscriptionTrendCard months={trend.data} /> : null}
           </View>
         </FadeSlideIn>
       ) : null}
