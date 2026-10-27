@@ -262,6 +262,10 @@ function ActionHeroCard({
   const { t } = useI18n();
   const theme = useTheme();
   const total = ownersPending.length;
+  // Its own pair per theme (not the app's blue): violet on the light theme, deep emerald on the dark one — both
+  // dark enough for the white text on top.
+  const heroFrom = theme.isDark ? '#047857' : '#7C3AED';
+  const heroTo = theme.isDark ? '#064E3B' : '#4C1D95';
 
   return (
     // `backgroundColor` here is a deliberate fallback, not decoration: the gradient below is an SVG
@@ -270,13 +274,13 @@ function ActionHeroCard({
     // `onPrimary` text above it still renders fine — the card then reads as a near-invisible "washed
     // out" block instead of the blue hero it's meant to be. A solid `theme.primary` base underneath
     // means that failure mode degrades to "flat blue instead of a gradient", never to unreadable text.
-    <View style={{ borderRadius: 30, padding: 20, gap: 14, overflow: 'hidden', backgroundColor: theme.primary }}>
+    <View style={{ borderRadius: 30, padding: 20, gap: 14, overflow: 'hidden', backgroundColor: heroFrom }}>
       <View {...decorativeA11yProps} pointerEvents="none" style={StyleSheet.absoluteFill}>
         <Svg width="100%" height="100%">
           <Defs>
             <LinearGradient id="adminActionHero" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0%" stopColor={theme.primary} />
-              <Stop offset="100%" stopColor={theme.primaryDeep} />
+              <Stop offset="0%" stopColor={heroFrom} />
+              <Stop offset="100%" stopColor={heroTo} />
             </LinearGradient>
           </Defs>
           <Rect x={0} y={0} width="100%" height="100%" fill="url(#adminActionHero)" />
