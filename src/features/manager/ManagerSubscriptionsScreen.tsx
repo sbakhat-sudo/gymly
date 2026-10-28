@@ -12,6 +12,7 @@ import { ChevronDownIcon, CreditCardIcon, EyeIcon, PlusIcon, SlidersIcon } from 
 import { Screen } from '@/components/Screen';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { HeaderCell, Pagination } from '@/components/TablePagination';
+import { Toggle } from '@/components/Toggle';
 import { FilterGroup } from '@/components/FilterControls';
 import {
   assignPlan,
@@ -453,6 +454,7 @@ function PlanCardSheet({
   const [durationUnit, setDurationUnit] = useState<'monthly' | 'annual'>(editing && editing.durationDays % 365 === 0 ? 'annual' : 'monthly');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [tier, setTier] = useState<PlanCardTier>(editing?.tier ?? 'normal');
+  const [includesCoach, setIncludesCoach] = useState(editing?.includesCoach ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
   const [wasTarget, setWasTarget] = useState(target);
@@ -465,6 +467,7 @@ function PlanCardSheet({
     setDurationUnit(next && next.durationDays % 365 === 0 ? 'annual' : 'monthly');
     setDescription(next?.description ?? '');
     setTier(next?.tier ?? 'normal');
+    setIncludesCoach(next?.includesCoach ?? false);
     setError(false);
   }
 
@@ -484,8 +487,8 @@ function PlanCardSheet({
     setError(false);
     try {
       const descriptionOrNull = description.trim().length > 0 ? description.trim() : null;
-      if (editing) await updatePlanCard(editing.id, name, priceNum, daysNum, descriptionOrNull, color, tier);
-      else await createPlanCard(name, priceNum, daysNum, descriptionOrNull, color, tier);
+      if (editing) await updatePlanCard(editing.id, name, priceNum, daysNum, descriptionOrNull, color, tier, includesCoach);
+      else await createPlanCard(name, priceNum, daysNum, descriptionOrNull, color, tier, includesCoach);
       onSaved();
     } catch {
       setError(true);
@@ -589,6 +592,15 @@ function PlanCardSheet({
               );
             })}
           </View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, borderWidth: 1.5, borderColor: theme.border }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <AppText style={{ fontWeight: '700', fontSize: 14 }}>{t('plan.coach.label')}</AppText>
+            <AppText muted style={{ fontSize: 12.5, lineHeight: 17 }}>
+              {t('plan.coach.help')}
+            </AppText>
+          </View>
+          <Toggle value={includesCoach} onValueChange={setIncludesCoach} accessibilityLabel={t('plan.coach.label')} />
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: color }} {...decorativeA11yProps} />

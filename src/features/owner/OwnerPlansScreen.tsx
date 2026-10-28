@@ -136,6 +136,9 @@ export function OwnerPlansScreen() {
                   {!c.active ? ` · ${t('owner.plans.inactive')}` : ''}
                 </AppText>
                 <AppText style={{ fontWeight: '800', fontSize: 20, color: tint }}>€{c.priceEur.toFixed(2)}</AppText>
+                <AppText variant="caption" muted style={{ fontWeight: '600' }}>
+                  {t(c.includesCoach ? 'plan.coach.included' : 'plan.coach.notIncluded')}
+                </AppText>
                 {c.description ? (
                   <AppText muted numberOfLines={3} style={{ fontSize: 12.5 }}>
                     {c.description}

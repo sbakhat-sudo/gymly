@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { ChevronLeftIcon } from '@/components/icons';
+import { Toggle } from '@/components/Toggle';
 import { useI18n } from '@/lib/i18n';
 import { MIN_TAP, radius, spacing, useTheme } from '@/lib/theme';
 
@@ -42,6 +43,7 @@ export function PlanCardModal({
   const [price, setPrice] = useState(editing ? String(editing.priceEur) : '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [color, setColor] = useState<string>(editing?.color ?? firstFreeColor);
+  const [includesCoach, setIncludesCoach] = useState(editing?.includesCoach ?? false);
   const [busy, setBusy] = useState(false);
   const [wasTarget, setWasTarget] = useState(target);
 
@@ -53,6 +55,7 @@ export function PlanCardModal({
     setPrice(editing ? String(editing.priceEur) : '');
     setDescription(editing?.description ?? '');
     setColor(editing?.color ?? firstFreeColor);
+    setIncludesCoach(editing?.includesCoach ?? false);
     setBusy(false);
   }
 
@@ -170,6 +173,16 @@ export function PlanCardModal({
               </AppText>
             </View>
 
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, borderWidth: 1.5, borderColor: theme.border }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText style={{ fontWeight: '700', fontSize: 14 }}>{t('plan.coach.label')}</AppText>
+                <AppText muted style={{ fontSize: 12.5, lineHeight: 17 }}>
+                  {t('plan.coach.help')}
+                </AppText>
+              </View>
+              <Toggle value={includesCoach} onValueChange={setIncludesCoach} accessibilityLabel={t('plan.coach.label')} />
+            </View>
+
             <View style={{ gap: 6 }}>
               <AppText variant="caption" style={{ fontWeight: '600' }}>
                 {t('owner.plans.color')}
@@ -216,7 +229,7 @@ export function PlanCardModal({
 
           <Button
             label={t('owner.plans.save')}
-            onPress={() => void guarded(() => onSave({ name: name.trim(), kind, priceEur: priceValue, description: description.trim() || null, color }))}
+            onPress={() => void guarded(() => onSave({ name: name.trim(), kind, priceEur: priceValue, description: description.trim() || null, color, includesCoach }))}
             disabled={!canSave}
           />
           {editing ? (

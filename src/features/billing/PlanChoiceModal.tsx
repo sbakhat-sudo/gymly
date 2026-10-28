@@ -217,6 +217,9 @@ export function PlanChoiceModal({
                               {c.description}
                             </AppText>
                           ) : null}
+                          <AppText style={{ fontSize: 12, fontWeight: '700', marginTop: 2, color: c.includesCoach ? theme.band.green.onSoft : theme.textMuted }}>
+                            {t(c.includesCoach ? 'plan.coach.included' : 'plan.coach.notIncluded')}
+                          </AppText>
                         </View>
                         {isCurrent ? null : (
                           <View style={{ marginTop: 10 }}>

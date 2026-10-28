@@ -321,6 +321,8 @@ export interface Database {
           /** A purely visual/organizational badge, independent of price/duration/colour. */
           tier: 'normal' | 'vip' | 'vvip';
           active: boolean;
+          /** Whether this plan includes the coach — only then can the member rate the coach. */
+          includes_coach: boolean;
           created_at: string;
         };
         Insert: never; // only via manager_create_plan_card()
@@ -352,6 +354,7 @@ export interface Database {
           description: string | null;
           color: string | null;
           active: boolean;
+          includes_coach: boolean;
           created_at: string;
         };
         Insert: never; // only via owner_create_plan_card()
@@ -587,6 +590,18 @@ export interface Database {
       manager_delete_announcement: {
         Args: { p_id: string };
         Returns: undefined;
+      };
+      owner_set_plan_card_coach: {
+        Args: { p_card_id: string; p_includes: boolean };
+        Returns: undefined;
+      };
+      manager_set_plan_card_coach: {
+        Args: { p_card_id: string; p_includes: boolean };
+        Returns: undefined;
+      };
+      client_has_coach_plan: {
+        Args: Record<string, never>;
+        Returns: boolean;
       };
       owner_change_plan: {
         Args: { p_plan: 'trial' | 'pro' | 'business' };

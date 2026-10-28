@@ -19,6 +19,8 @@ export interface PlanCard {
   /** Purely a visual/organizational badge, independent of price/duration/colour. */
   tier: PlanCardTier;
   active: boolean;
+  /** Whether the plan includes the coach: only then can the member rate the coach. */
+  includesCoach: boolean;
 }
 
 export interface MySubscription {
@@ -52,9 +54,9 @@ export async function getMySubscription(): Promise<MySubscriptionState> {
  * caller's site and `active` rows only), same pattern as `gym_chains`: a select policy + RPC-only
  * writes, no read RPC needed. */
 export async function getAvailablePlanCards(): Promise<PlanCard[]> {
-  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, owner_card_id, description, color, tier, active').order('price_eur');
+  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, owner_card_id, description, color, tier, active, includes_coach').order('price_eur');
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, ownerCardId: r.owner_card_id, description: r.description, color: r.color, tier: r.tier, active: r.active }));
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, ownerCardId: r.owner_card_id, description: r.description, color: r.color, tier: r.tier, active: r.active, includesCoach: r.includes_coach }));
 }
 
 export async function choosePlan(cardId: string): Promise<void> {
@@ -125,14 +127,36 @@ export async function deleteSubscription(clientId: string): Promise<void> {
 /** The Manager's own catalog, active and retired cards alike (so a retired one still shows up, just
  * not toggleable back on by accident from an "assign" sheet — see `ManagerSubscriptionsScreen.tsx`). */
 export async function getManagerPlanCards(): Promise<PlanCard[]> {
-  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, owner_card_id, description, color, tier, active').order('created_at');
+  const { data, error } = await supabase.from('site_plan_cards').select('id, name, price_eur, duration_days, owner_card_id, description, color, tier, active, includes_coach').order('created_at');
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, ownerCardId: r.owner_card_id, description: r.description, color: r.color, tier: r.tier, active: r.active }));
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, priceEur: r.price_eur, durationDays: r.duration_days, ownerCardId: r.owner_card_id, description: r.description, color: r.color, tier: r.tier, active: r.active, includesCoach: r.includes_coach }));
 }
 
-export async function createPlanCard(name: string, priceEur: number, durationDays: number, description: string | null, color: string | null, tier: PlanCardTier): Promise<void> {
-  const { error } = await supabase.rpc('manager_create_plan_card', { p_name: name, p_price_eur: priceEur, p_duration_days: durationDays, p_description: description, p_color: color, p_tier: tier });
+export async function createPlanCard(
+  name: string,
+  priceEur: number,
+  durationDays: number,
+  description: string | null,
+  color: string | null,
+  tier: PlanCardTier,
+  includesCoach: boolean
+): Promise<void> {
+  const { data, error } = await supabase.rpc('manager_create_plan_card', { p_name: name, p_price_eur: priceEur, p_duration_days: durationDays, p_description: description, p_color: color, p_tier: tier });
   if (error) throw error;
+  if (includesCoach) await setPlanCardIncludesCoach(data, true);
+}
+
+/** Whether a card of the Manager's own includes the coach (the Owner decides this for the Owner's cards). */
+export async function setPlanCardIncludesCoach(cardId: string, includesCoach: boolean): Promise<void> {
+  const { error } = await supabase.rpc('manager_set_plan_card_coach', { p_card_id: cardId, p_includes: includesCoach });
+  if (error) throw error;
+}
+
+/** Does the signed-in member's live plan include the coach? Only then may they rate the coach. */
+export async function getMyPlanIncludesCoach(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('client_has_coach_plan');
+  if (error) throw error;
+  return data;
 }
 
 export async function updatePlanCard(
@@ -142,7 +166,8 @@ export async function updatePlanCard(
   durationDays: number,
   description: string | null,
   color: string | null,
-  tier: PlanCardTier
+  tier: PlanCardTier,
+  includesCoach: boolean
 ): Promise<void> {
   const { error } = await supabase.rpc('manager_update_plan_card', {
     p_card_id: cardId,
@@ -154,6 +179,7 @@ export async function updatePlanCard(
     p_tier: tier,
   });
   if (error) throw error;
+  await setPlanCardIncludesCoach(cardId, includesCoach);
 }
 
 export async function setPlanCardActive(cardId: string, active: boolean): Promise<void> {

@@ -251,6 +251,8 @@ export interface OwnerPlanCard {
   /** Hex that makes the card recognisable everywhere it appears. */
   color: string | null;
   active: boolean;
+  /** Whether the plan includes the coach: only then can the member rate the coach. */
+  includesCoach: boolean;
   createdAt: string;
 }
 
@@ -260,22 +262,31 @@ export interface OwnerPlanCardInput {
   priceEur: number;
   description: string | null;
   color: string | null;
+  includesCoach: boolean;
 }
 
 export async function getOwnerPlanCards(): Promise<OwnerPlanCard[]> {
-  const { data, error } = await supabase.from('owner_plan_cards').select('id, name, kind, price_eur, description, color, active, created_at').order('created_at');
+  const { data, error } = await supabase.from('owner_plan_cards').select('id, name, kind, price_eur, description, color, active, includes_coach, created_at').order('created_at');
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, kind: r.kind, priceEur: r.price_eur, description: r.description, color: r.color, active: r.active, createdAt: r.created_at }));
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, kind: r.kind, priceEur: r.price_eur, description: r.description, color: r.color, active: r.active, includesCoach: r.includes_coach, createdAt: r.created_at }));
 }
 
 export async function createOwnerPlanCard(input: OwnerPlanCardInput): Promise<void> {
-  const { error } = await supabase.rpc('owner_create_plan_card', { p_name: input.name, p_kind: input.kind, p_price_eur: input.priceEur, p_description: input.description, p_color: input.color });
+  const { data, error } = await supabase.rpc('owner_create_plan_card', { p_name: input.name, p_kind: input.kind, p_price_eur: input.priceEur, p_description: input.description, p_color: input.color });
+  if (error) throw error;
+  if (input.includesCoach) await setOwnerPlanCardIncludesCoach(data, true);
+}
+
+/** Whether this card includes the coach — copied to the card of every gym in the chain. */
+export async function setOwnerPlanCardIncludesCoach(cardId: string, includesCoach: boolean): Promise<void> {
+  const { error } = await supabase.rpc('owner_set_plan_card_coach', { p_card_id: cardId, p_includes: includesCoach });
   if (error) throw error;
 }
 
 export async function updateOwnerPlanCard(cardId: string, input: OwnerPlanCardInput): Promise<void> {
   const { error } = await supabase.rpc('owner_update_plan_card', { p_card_id: cardId, p_name: input.name, p_kind: input.kind, p_price_eur: input.priceEur, p_description: input.description, p_color: input.color });
   if (error) throw error;
+  await setOwnerPlanCardIncludesCoach(cardId, input.includesCoach);
 }
 
 export async function setOwnerPlanCardActive(cardId: string, active: boolean): Promise<void> {

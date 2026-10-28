@@ -9,6 +9,7 @@ import { Card, SectionTitle } from '@/components/Card';
 import { ChevronLeftIcon } from '@/components/icons';
 import { Screen } from '@/components/Screen';
 import { StarRatingInput } from '@/components/StarRating';
+import { getMyPlanIncludesCoach } from '@/features/billing/billing-api';
 import { useAuth } from '@/lib/auth/auth-context';
 import { getMySiteCoaches, isDuplicateRating, submitCoachRating, submitIssueReport, type SiteCoach } from '@/lib/feedback-api';
 import { useI18n } from '@/lib/i18n';
@@ -40,6 +41,8 @@ export function SubmitFeedbackScreen({ checkinId, autoPrompt = false }: { checki
   const auth = useAuth();
   const userId = auth.status === 'active' ? auth.session.user.id : null;
   const coaches = useAsync(() => getMySiteCoaches(), []);
+  // Rating the coach needs a plan that includes the coach; sending a report never does.
+  const coachPlan = useAsync(() => getMyPlanIncludesCoach(), []);
 
   const [selectedCoach, setSelectedCoach] = useState<SiteCoach | null>(null);
   const [rating, setRating] = useState(0);
@@ -125,7 +128,13 @@ export function SubmitFeedbackScreen({ checkinId, autoPrompt = false }: { checki
       <Card>
         <SectionTitle>{t('feedback.rating.title')}</SectionTitle>
 
-        {coaches.loading && coaches.data === undefined ? (
+        {coachPlan.data === undefined && coachPlan.error === null ? (
+          <ActivityIndicator style={{ marginVertical: spacing.md }} />
+        ) : coachPlan.data !== true ? (
+          <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
+            {t('feedback.rating.noCoachPlan')}
+          </AppText>
+        ) : coaches.loading && coaches.data === undefined ? (
           <ActivityIndicator style={{ marginVertical: spacing.md }} />
         ) : coaches.data && coaches.data.length === 0 ? (
           <AppText muted style={{ fontSize: 13, lineHeight: 18 }}>
